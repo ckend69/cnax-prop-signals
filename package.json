@@ -1,0 +1,29 @@
+{
+  "name": "cnax-prop-signals",
+  "version": "1.0.0",
+  "description": "CNAX Prop Signals — AI-powered trading signals for prop firm challenges",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --mac --win"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "pro.cnaxsoftware.signals",
+    "productName": "CNAX Prop Signals",
+    "directories": { "output": "dist" },
+    "files": ["electron/**/*", "src/**/*"],
+    "mac": {
+      "category": "public.app-category.finance",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

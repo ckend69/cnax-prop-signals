@@ -379,6 +379,183 @@
     .toast.success { border-left: 3px solid var(--green); }
     .toast.error   { border-left: 3px solid var(--red);   }
     .toast.info    { border-left: 3px solid var(--cyan);  }
+
+    /* ═══════════════════════════════════════════════════
+       DAILY BIAS VIEW
+    ═══════════════════════════════════════════════════ */
+    .bias-view { display: none; flex-direction: column; overflow-y: auto; padding: 16px; gap: 12px; }
+    .bias-view.active { display: flex; }
+    .bias-header-bar {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 18px; margin-bottom: 4px;
+    }
+    .bias-dir {
+      font-size: 20px; font-weight: 900; font-family: var(--mono);
+      padding: 4px 14px; border-radius: 6px;
+    }
+    .bias-dir.BULLISH { background: rgba(0,255,136,.15); color: var(--green); border: 1px solid rgba(0,255,136,.3); }
+    .bias-dir.BEARISH { background: rgba(255,68,102,.15); color: var(--red);   border: 1px solid rgba(255,68,102,.3); }
+    .bias-dir.NEUTRAL { background: rgba(255,255,255,.05); color: var(--muted); border: 1px solid var(--border); }
+    .bias-strength { font-size: 13px; color: var(--muted); }
+    .bias-strength span { color: var(--cyan); font-weight: 700; font-family: var(--mono); }
+    .bias-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+    .bias-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px;
+    }
+    .bias-sym { font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+    .bias-stat { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+    .bias-stat-label { color: var(--muted); }
+    .bias-stat-val { font-family: var(--mono); font-weight: 600; }
+    .bias-reasons { margin-top: 8px; }
+    .bias-reason { font-size: 10px; color: var(--muted2); padding-left: 8px; position: relative; margin-bottom: 2px; }
+    .bias-reason::before { content: '–'; position: absolute; left: 0; color: var(--muted2); }
+    .scan-bias-btn {
+      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      border: none; color: #fff; border-radius: 8px;
+      padding: 8px 18px; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: opacity .2s; align-self: flex-start;
+    }
+    .scan-bias-btn:hover { opacity: .85; }
+    .scan-bias-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ═══════════════════════════════════════════════════
+       BACKTEST VIEW
+    ═══════════════════════════════════════════════════ */
+    .backtest-view { display: none; flex-direction: column; overflow-y: auto; padding: 16px; gap: 14px; }
+    .backtest-view.active { display: flex; }
+    .bt-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .bt-select {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); border-radius: 6px; padding: 7px 10px; font-size: 12px;
+    }
+    .bt-run-btn {
+      background: linear-gradient(135deg, var(--primary), var(--cyan));
+      border: none; color: #fff; border-radius: 8px; padding: 8px 18px;
+      font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .2s;
+    }
+    .bt-run-btn:hover { opacity: .85; }
+    .bt-run-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .bt-results { display: flex; flex-direction: column; gap: 12px; }
+    .bt-summary {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;
+    }
+    .bt-stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .bt-stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 4px; }
+    .bt-stat-val   { font-size: 18px; font-weight: 700; font-family: var(--mono); }
+    .bt-trade-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .bt-trade-table th {
+      text-align: left; color: var(--muted); font-size: 10px; text-transform: uppercase;
+      letter-spacing: .07em; padding: 4px 8px; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; background: var(--bg);
+    }
+    .bt-trade-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .bt-win  { color: var(--green); font-weight: 700; }
+    .bt-loss { color: var(--red);   font-weight: 700; }
+    .bt-be   { color: var(--muted); }
+    .bt-patterns { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+    .bt-pattern-row { display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
+    .bt-pattern-row:last-child { border-bottom: none; }
+
+    /* ═══════════════════════════════════════════════════
+       NEWS VIEW
+    ═══════════════════════════════════════════════════ */
+    .news-view { display: none; flex-direction: column; overflow-y: auto; padding: 16px; gap: 12px; }
+    .news-view.active { display: flex; }
+    .news-symbol-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+    .news-tab {
+      background: transparent; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 5px; padding: 4px 10px; font-size: 11px; cursor: pointer; transition: all .15s;
+    }
+    .news-tab.active { background: rgba(99,102,241,.15); border-color: var(--primary); color: var(--text); }
+    .news-sentiment-bar {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 16px;
+    }
+    .sent-score {
+      font-size: 24px; font-weight: 900; font-family: var(--mono); min-width: 60px; text-align: center;
+    }
+    .sent-score.bull { color: var(--green); }
+    .sent-score.bear { color: var(--red);   }
+    .sent-score.neut { color: var(--muted); }
+    .sent-label { font-size: 12px; }
+    .sent-label .sent-dir { font-weight: 700; font-size: 14px; }
+    .sent-summary { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .news-reaction {
+      background: rgba(99,102,241,.06); border: 1px solid rgba(99,102,241,.15);
+      border-radius: 8px; padding: 10px 14px; font-size: 11px; color: #cbd5e1; line-height: 1.6;
+    }
+    .news-articles { display: flex; flex-direction: column; gap: 8px; }
+    .news-article {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .na-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .na-headline { font-size: 12px; font-weight: 600; line-height: 1.4; }
+    .na-sentiment {
+      font-size: 10px; font-weight: 700; font-family: var(--mono);
+      padding: 2px 6px; border-radius: 3px; white-space: nowrap; flex-shrink: 0;
+    }
+    .na-sentiment.bull { background: rgba(0,255,136,.12); color: var(--green); }
+    .na-sentiment.bear { background: rgba(255,68,102,.12); color: var(--red);   }
+    .na-sentiment.neut { background: rgba(255,255,255,.05); color: var(--muted); }
+    .na-meta { font-size: 10px; color: var(--muted2); }
+    .na-high-impact { display: inline; font-size: 9px; background: rgba(245,158,11,.15); color: var(--amber); border-radius: 3px; padding: 1px 5px; margin-left: 4px; }
+    .fetch-news-btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 7px; padding: 7px 14px; font-size: 12px; cursor: pointer; align-self: flex-start;
+    }
+    .fetch-news-btn:hover { border-color: var(--primary); }
+
+    /* ═══════════════════════════════════════════════════
+       PREDICTION INLINE (on signal cards)
+    ═══════════════════════════════════════════════════ */
+    .sc-prediction {
+      display: flex; flex-direction: column; gap: 6px;
+      background: rgba(0,212,255,.04); border: 1px solid rgba(0,212,255,.15);
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+    }
+    .pred-header { display: flex; align-items: center; gap: 8px; }
+    .pred-label { font-size: 10px; color: var(--cyan); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+    .pred-dir {
+      font-size: 11px; font-weight: 800; font-family: var(--mono);
+      padding: 1px 8px; border-radius: 3px;
+    }
+    .pred-dir.UP   { background: rgba(0,255,136,.15); color: var(--green); }
+    .pred-dir.DOWN { background: rgba(255,68,102,.15); color: var(--red);   }
+    .pred-dir.FLAT { background: rgba(255,255,255,.05); color: var(--muted); }
+    .pred-conf     { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+    .pred-factors  { display: flex; flex-direction: column; gap: 2px; }
+    .pred-factor   { font-size: 10px; color: var(--muted2); display: flex; gap: 6px; }
+    .pred-factor-name { flex: 1; }
+    .pred-factor-val  { font-family: var(--mono); }
+    .pred-factor.bull .pred-factor-name { color: rgba(0,255,136,.8); }
+    .pred-factor.bear .pred-factor-name { color: rgba(255,68,102,.8); }
+    .pred-time-hint { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* ═══════════════════════════════════════════════════
+       TRADE TIMELINE
+    ═══════════════════════════════════════════════════ */
+    .sc-timeline {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+    }
+    .timeline-label { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+    .timeline-track { display: flex; align-items: center; gap: 0; height: 20px; border-radius: 4px; overflow: hidden; position: relative; }
+    .timeline-seg {
+      height: 100%; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; font-family: var(--mono); transition: flex .3s;
+    }
+    .timeline-seg.open { background: rgba(99,102,241,.3); color: var(--primary); }
+    .timeline-seg.tp   { background: rgba(0,255,136,.5);  color: #fff; }
+    .timeline-seg.sl   { background: rgba(255,68,102,.5); color: #fff; }
+    .timeline-meta { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 6px; }
+    .timeline-est  { font-family: var(--mono); color: var(--cyan); }
   </style>
 </head>
 <body>
@@ -494,9 +671,12 @@
     <!-- Nav -->
     <div style="flex:1"></div>
     <div style="border-top:1px solid var(--border)">
-      <div class="nav-item active" id="nav-signals" onclick="setView('signals')">📡 Live Signals</div>
-      <div class="nav-item" id="nav-journal" onclick="setView('journal')">📓 Trade Journal</div>
-      <div class="nav-item" id="nav-rules" onclick="setView('rules')">📋 Firm Rules</div>
+      <div class="nav-item active" id="nav-signals"   onclick="setView('signals')">📡 Live Signals</div>
+      <div class="nav-item"        id="nav-bias"      onclick="setView('bias')">🧭 Daily Bias</div>
+      <div class="nav-item"        id="nav-backtest"  onclick="setView('backtest')">📊 Backtest</div>
+      <div class="nav-item"        id="nav-news"      onclick="setView('news')">📰 Market News</div>
+      <div class="nav-item"        id="nav-journal"   onclick="setView('journal')">📓 Trade Journal</div>
+      <div class="nav-item"        id="nav-rules"     onclick="setView('rules')">📋 Firm Rules</div>
     </div>
   </aside>
 
@@ -552,6 +732,12 @@
     </div>
 
     <div class="field">
+      <label>Finnhub API Key (News Sentiment)</label>
+      <input type="password" id="set-finnhub" placeholder="finnhub.io → free tier" />
+      <div class="hint">Optional free key — enables live market news &amp; sentiment analysis. Without it, keyword-based scoring is used.</div>
+    </div>
+
+    <div class="field">
       <label>Auto-Refresh Interval</label>
       <select id="set-refresh">
         <option value="0">Off (manual only)</option>
@@ -595,11 +781,94 @@
 <!-- ── TOAST CONTAINER ────────────────────────────────────────────────────── -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
+<!-- ── DAILY BIAS VIEW (injected into main area via JS) ──────────────────── -->
+<template id="tpl-bias-view">
+  <div class="bias-view" id="bias-view">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;">Daily Momentum Bias</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Intraday directional bias based on gap, VWAP, EMA stack &amp; 30m momentum</div>
+      </div>
+      <button class="scan-bias-btn" id="bias-scan-btn" onclick="runDailyBias()">&#9654; Compute Bias</button>
+    </div>
+    <div id="bias-cards" class="bias-cards">
+      <div class="empty-state" style="grid-column:1/-1;height:200px;">
+        <div class="empty-icon">🧭</div>
+        <div class="empty-title">No Bias Data</div>
+        <div class="empty-sub">Click "Compute Bias" to analyze today's directional setup for all instruments.</div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ── BACKTEST VIEW ──────────────────────────────────────────────────────── -->
+<template id="tpl-backtest-view">
+  <div class="backtest-view" id="backtest-view">
+    <div>
+      <div style="font-size:15px;font-weight:700;">Signal Backtester</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px;">Walk-forward backtest of signal engine on historical data. Uses actual market data where available.</div>
+    </div>
+    <div class="bt-controls">
+      <select class="bt-select" id="bt-sym">
+        <option value="NQ">NQ — Nasdaq</option>
+        <option value="ES">ES — S&amp;P 500</option>
+        <option value="CL">CL — Crude Oil</option>
+        <option value="GC">GC — Gold</option>
+        <option value="BTCUSDT">BTCUSDT</option>
+        <option value="ETHUSDT">ETHUSDT</option>
+        <option value="EURUSD">EURUSD</option>
+        <option value="GBPUSD">GBPUSD</option>
+      </select>
+      <select class="bt-select" id="bt-interval">
+        <option value="1d">Daily bars</option>
+        <option value="1h">Hourly bars</option>
+      </select>
+      <select class="bt-select" id="bt-lookback">
+        <option value="252">1 Year (252 bars)</option>
+        <option value="126">6 Months</option>
+        <option value="60">3 Months</option>
+      </select>
+      <button class="bt-run-btn" id="bt-run-btn" onclick="runBacktest()">&#9654; Run Backtest</button>
+    </div>
+    <div id="bt-results" class="bt-results">
+      <div class="empty-state" style="height:180px;">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">No Backtest Run</div>
+        <div class="empty-sub">Select a symbol and click "Run Backtest" to replay historical signals.</div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<!-- ── NEWS VIEW ─────────────────────────────────────────────────────────── -->
+<template id="tpl-news-view">
+  <div class="news-view" id="news-view">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;">Market News &amp; Sentiment</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">News sentiment analysis + how the market is reacting to current events</div>
+      </div>
+      <button class="fetch-news-btn" onclick="fetchNews()">&#8635; Refresh News</button>
+    </div>
+    <div class="news-symbol-tabs" id="news-tabs"></div>
+    <div id="news-sentiment-area">
+      <div class="empty-state" style="height:160px;">
+        <div class="empty-icon">📰</div>
+        <div class="empty-title">No News Data</div>
+        <div class="empty-sub">Add a Finnhub API key in Settings to enable live news sentiment (free tier). Without a key, rule-based keyword scoring is used.</div>
+      </div>
+    </div>
+  </div>
+</template>
+
 <!-- ── SCRIPTS ────────────────────────────────────────────────────────────── -->
 <script src="js/propFirms.js"></script>
 <script src="js/marketData.js"></script>
 <script src="js/signals.js"></script>
 <script src="js/aiAnalysis.js"></script>
+<script src="js/backtester.js"></script>
+<script src="js/newsSentiment.js"></script>
+<script src="js/prediction.js"></script>
 <script>
 // ── App State ──────────────────────────────────────────────────────────────
 let challenge = new ChallengeState();
@@ -608,13 +877,14 @@ let filter    = 'all';
 let scanning  = false;
 let refreshTimer = null;
 let settings = {
-  groqKey:   '',
-  avKey:     '',
-  refresh:   15,
-  minConf:   65,
-  forex:     true,
-  futures:   true,
-  crypto:    true,
+  groqKey:     '',
+  avKey:       '',
+  finnhubKey:  '',
+  refresh:     15,
+  minConf:     65,
+  forex:       true,
+  futures:     true,
+  crypto:      true,
 };
 
 // ── Boot ────────────────────────────────────────────────────────────────────
@@ -644,13 +914,15 @@ function loadSettings() {
 function applySettings() {
   window.aiAnalyzer.setApiKey(settings.groqKey);
   window.marketData.setAlphaVantageKey(settings.avKey);
+  if (window.newsSentiment) window.newsSentiment.setFinnhubKey(settings.finnhubKey || '');
   scheduleRefresh();
 }
 
 function openSettings() {
-  document.getElementById('set-groq').value    = settings.groqKey;
-  document.getElementById('set-av').value      = settings.avKey;
-  document.getElementById('set-refresh').value = settings.refresh;
+  document.getElementById('set-groq').value      = settings.groqKey;
+  document.getElementById('set-av').value        = settings.avKey;
+  document.getElementById('set-finnhub').value   = settings.finnhubKey || '';
+  document.getElementById('set-refresh').value   = settings.refresh;
   document.getElementById('set-minconf').value = settings.minConf;
   document.getElementById('set-forex').checked   = settings.forex;
   document.getElementById('set-futures').checked = settings.futures;
@@ -663,8 +935,9 @@ function closeSettings() {
 }
 
 function saveSettings() {
-  settings.groqKey  = document.getElementById('set-groq').value.trim();
-  settings.avKey    = document.getElementById('set-av').value.trim();
+  settings.groqKey    = document.getElementById('set-groq').value.trim();
+  settings.avKey      = document.getElementById('set-av').value.trim();
+  settings.finnhubKey = document.getElementById('set-finnhub')?.value.trim() || '';
   settings.refresh  = parseInt(document.getElementById('set-refresh').value);
   settings.minConf  = parseInt(document.getElementById('set-minconf').value);
   settings.forex    = document.getElementById('set-forex').checked;
@@ -821,10 +1094,13 @@ function calcRisk() {
 function getSymbolsToScan() {
   const syms = [];
   if (settings.forex)   syms.push('EURUSD','GBPUSD','USDJPY','XAUUSD','AUDUSD','USDCAD');
-  if (settings.futures) syms.push('ES','NQ','CL','GC');
+  if (settings.futures) syms.push('ES','NQ','CL','GC','YM','RTY','MNQ','MES');
   if (settings.crypto)  syms.push('BTCUSDT','ETHUSDT','SOLUSDT');
   return syms;
 }
+
+// Alias used by new bias/news views
+function getActiveSymbols() { return getSymbolsToScan(); }
 
 async function startScan() {
   if (scanning) return;
@@ -920,9 +1196,19 @@ function renderSignals() {
   }
 
   feed.innerHTML = visible.map(s => renderCard(s)).join('');
+
+  // Async-enrich each card with prediction + timeline (non-blocking)
+  visible.forEach(s => {
+    const cardId  = `card-${s.id || s.symbol + s.direction}`.replace(/[^a-z0-9-]/gi, '_');
+    const cardEl  = feed.querySelector(`[data-card-id="${cardId}"]`);
+    if (!cardEl) return;
+    renderPrediction(s.symbol, cardEl).catch(() => {});
+    renderTradeTimeline(s, cardEl).catch(() => {});
+  });
 }
 
 function renderCard(s) {
+  const cardId = `card-${(s.id || s.symbol + s.direction).replace(/[^a-z0-9-]/gi, '_')}`;
   const isBuy  = s.direction === 'BUY';
   const cls    = isBuy ? 'buy' : 'sell';
   const dirBdg = isBuy ? '<span class="direction-badge buy-badge">▲ BUY</span>' : '<span class="direction-badge sell-badge">▼ SELL</span>';
@@ -944,14 +1230,17 @@ function renderCard(s) {
 
   const blocked = s.blocked ? '<div class="sc-warning">🚫 DO NOT TRADE — Daily limit reached</div>' : '';
 
+  const timingTag = s.timingHint ? `<span class="timeframe-badge" style="color:var(--amber)">⏱ ${s.timingHint}</span>` : '';
+
   return `
-  <div class="signal-card ${cls}" ${s.blocked ? 'style="opacity:.5"' : ''}>
+  <div class="signal-card ${cls}" data-card-id="${cardId}" ${s.blocked ? 'style="opacity:.5"' : ''}>
     <div class="sc-header">
       <div class="sc-left">
         ${dirBdg}
         <span class="symbol-text">${s.display}</span>
         <span class="timeframe-badge">${s.timeframe}</span>
         <span class="timeframe-badge" style="color:var(--primary)">${typeTag}</span>
+        ${timingTag}
       </div>
       ${ring}
     </div>
@@ -1045,11 +1334,307 @@ function enableScanBtns(on) {
   if (icon) icon.textContent = on ? '⚡' : '⏳';
 }
 
+// ── Active view management ────────────────────────────────────────────────
+const VIEW_IDS = ['signals', 'bias', 'backtest', 'news', 'journal', 'rules'];
+let currentView = 'signals';
+
 function setView(v) {
+  currentView = v;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(`nav-${v}`)?.classList.add('active');
-  // Simplified: only signals view fully implemented
-  if (v !== 'signals') toast('Coming in next update', 'info');
+
+  // Hide all views
+  document.querySelector('.signal-feed')?.closest('.main')?.querySelectorAll('[data-view]').forEach(el => {
+    el.style.display = 'none';
+  });
+  document.querySelector('.signal-feed')?.style.setProperty('display', v === 'signals' ? 'flex' : 'none');
+  document.querySelector('.main-header')?.style.setProperty('display', v === 'signals' ? '' : 'none');
+  document.querySelectorAll('.journal-view, .rules-view').forEach(el => {
+    el.classList.remove('active');
+  });
+
+  if (v === 'signals') {
+    document.querySelector('.signal-feed').style.display = 'flex';
+    document.querySelector('.main-header').style.display = '';
+  } else if (v === 'journal') {
+    document.querySelector('.journal-view')?.classList.add('active');
+    renderJournal();
+  } else if (v === 'rules') {
+    document.querySelector('.rules-view')?.classList.add('active');
+  } else {
+    // Dynamic views: bias, backtest, news
+    _ensureDynamicView(v);
+  }
+}
+
+function _ensureDynamicView(v) {
+  const main = document.querySelector('.main');
+  let el = document.getElementById(`${v}-view`);
+  if (!el) {
+    const tpl = document.getElementById(`tpl-${v}-view`);
+    if (!tpl) return;
+    const frag = tpl.content.cloneNode(true);
+    main.appendChild(frag);
+    el = document.getElementById(`${v}-view`);
+  }
+  // Hide other dynamic views
+  ['bias-view','backtest-view','news-view'].forEach(id => {
+    const d = document.getElementById(id);
+    if (d) d.style.display = id === `${v}-view` ? 'flex' : 'none';
+  });
+  if (el) el.style.display = 'flex';
+}
+
+// ── Daily Bias ────────────────────────────────────────────────────────────
+async function runDailyBias() {
+  const btn = document.getElementById('bias-scan-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Computing…'; }
+
+  const container = document.getElementById('bias-cards');
+  if (container) container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;height:120px;"><div class="spinner"></div><div style="margin-top:8px;color:var(--muted)">Analyzing intraday momentum…</div></div>';
+
+  const syms = getActiveSymbols();
+  const results = await Promise.allSettled(syms.map(s => window.predictionEngine.getDailyBias(s)));
+  const biases  = results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+
+  if (container) {
+    if (biases.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="grid-column:1/-1;height:120px;"><div class="empty-title">No bias data</div></div>';
+    } else {
+      container.innerHTML = biases.map(b => {
+        const dirClass = b.direction;
+        const isPosGap = b.gapPct > 0;
+        return `
+          <div class="bias-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div class="bias-sym">${window.INSTRUMENTS[b.symbol]?.display || b.symbol}</div>
+              <div class="bias-dir ${dirClass}">${b.direction}</div>
+            </div>
+            <div class="bias-stat"><span class="bias-stat-label">Strength</span><span class="bias-stat-val" style="color:var(--cyan)">${b.strength}%</span></div>
+            <div class="bias-stat"><span class="bias-stat-label">Gap</span><span class="bias-stat-val" style="color:${isPosGap?'var(--green)':'var(--red)'}">${isPosGap?'+':''}${b.gapPct}%</span></div>
+            <div class="bias-stat"><span class="bias-stat-label">VWAP</span><span class="bias-stat-val">${b.vwap?.toFixed(4)}</span></div>
+            <div class="bias-stat"><span class="bias-stat-label">Range Position</span><span class="bias-stat-val">${b.pricePosition}%</span></div>
+            <div class="bias-stat"><span class="bias-stat-label">RSI</span><span class="bias-stat-val">${b.rsi}</span></div>
+            <div class="bias-reasons">
+              ${(b.reasons||[]).map(r => `<div class="bias-reason">${r}</div>`).join('')}
+            </div>
+          </div>`;
+      }).join('');
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '▶ Compute Bias'; }
+}
+
+// ── Backtest ──────────────────────────────────────────────────────────────
+async function runBacktest() {
+  const btn = document.getElementById('bt-run-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+
+  const sym      = document.getElementById('bt-sym')?.value || 'NQ';
+  const interval = document.getElementById('bt-interval')?.value || '1d';
+  const lookback = parseInt(document.getElementById('bt-lookback')?.value || '252');
+  const results  = document.getElementById('bt-results');
+
+  if (results) results.innerHTML = '<div class="empty-state" style="height:140px;"><div class="spinner"></div><div style="margin-top:8px;color:var(--muted)">Running walk-forward backtest…</div></div>';
+
+  const r = await window.backtester.runBacktest(sym, { interval, lookback });
+
+  if (results) {
+    if (!r) {
+      results.innerHTML = '<div class="empty-state" style="height:140px;"><div class="empty-title">Insufficient data</div><div class="empty-sub">Try a different symbol or interval.</div></div>';
+    } else {
+      const pnlColor = r.totalPnL >= 0 ? 'var(--green)' : 'var(--red)';
+      const pfColor  = r.profitFactor >= 1.5 ? 'var(--green)' : r.profitFactor >= 1 ? 'var(--amber)' : 'var(--red)';
+      const wrColor  = r.winRate >= 55 ? 'var(--green)' : r.winRate >= 45 ? 'var(--amber)' : 'var(--red)';
+      results.innerHTML = `
+        <div class="bt-summary">
+          <div class="bt-stat"><div class="bt-stat-label">Trades</div><div class="bt-stat-val">${r.totalTrades}</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Win Rate</div><div class="bt-stat-val" style="color:${wrColor}">${r.winRate}%</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Avg R</div><div class="bt-stat-val" style="color:${r.avgR>=0?'var(--green)':'var(--red)'}">${r.avgR > 0 ? '+' : ''}${r.avgR}R</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Profit Factor</div><div class="bt-stat-val" style="color:${pfColor}">${r.profitFactor}</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Total P&L</div><div class="bt-stat-val" style="color:${pnlColor}">${r.totalPnL >= 0 ? '+' : ''}$${r.totalPnL.toLocaleString()}</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Max Drawdown</div><div class="bt-stat-val" style="color:var(--red)">${r.maxDrawdown}%</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Wins</div><div class="bt-stat-val bt-win">${r.wins}</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Losses</div><div class="bt-stat-val bt-loss">${r.losses}</div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:320px;">
+          <table class="bt-trade-table">
+            <thead><tr>
+              <th>Date</th><th>Dir</th><th>Conf</th><th>Result</th><th>R</th><th>P&L $</th><th>Bars</th>
+            </tr></thead>
+            <tbody>
+              ${(r.trades||[]).slice().reverse().map(t => {
+                const cls = t.outcome === 'win' ? 'bt-win' : t.outcome === 'loss' ? 'bt-loss' : 'bt-be';
+                const date = new Date(t.time).toLocaleDateString();
+                return `<tr>
+                  <td style="color:var(--muted)">${date}</td>
+                  <td style="color:${t.direction==='BUY'?'var(--green)':'var(--red)'}">${t.direction}</td>
+                  <td style="font-family:var(--mono)">${t.confidence}%</td>
+                  <td class="${cls}">${t.outcome.toUpperCase()}</td>
+                  <td class="${cls}">${t.rMultiple > 0 ? '+' : ''}${t.rMultiple}R</td>
+                  <td style="color:${t.pnlDollars>=0?'var(--green)':'var(--red)'}">${t.pnlDollars>=0?'+':''}$${Math.abs(t.pnlDollars)}</td>
+                  <td style="color:var(--muted)">${t.barsHeld}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '▶ Run Backtest'; }
+}
+
+// ── News Sentiment ─────────────────────────────────────────────────────────
+let activeNewsSym = null;
+
+async function fetchNews() {
+  const syms  = getActiveSymbols().slice(0, 8);
+  const tabs  = document.getElementById('news-tabs');
+  const area  = document.getElementById('news-sentiment-area');
+  if (!tabs || !area) return;
+
+  activeNewsSym = activeNewsSym || syms[0];
+
+  // Build symbol tabs
+  tabs.innerHTML = syms.map(s => `
+    <button class="news-tab ${s === activeNewsSym ? 'active' : ''}"
+      onclick="fetchNewsForSym('${s}')">${window.INSTRUMENTS[s]?.display || s}</button>
+  `).join('');
+
+  await fetchNewsForSym(activeNewsSym);
+}
+
+async function fetchNewsForSym(sym) {
+  activeNewsSym = sym;
+  // Update tab active state
+  document.querySelectorAll('.news-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.trim() === (window.INSTRUMENTS[sym]?.display || sym));
+  });
+
+  const area = document.getElementById('news-sentiment-area');
+  if (!area) return;
+  area.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)"><div class="spinner" style="margin:0 auto 10px"></div>Loading news…</div>';
+
+  const sentiment = await window.newsSentiment.getNewsSentiment(sym);
+  const score     = sentiment?.score || 0;
+  const scoreAbs  = Math.abs(score);
+  const scoreClass = score > 10 ? 'bull' : score < -10 ? 'bear' : 'neut';
+
+  // Get live price reaction
+  let reactionHtml = '';
+  try {
+    const c1m     = await window.marketData.getCandles1m(sym, 20);
+    const reaction = window.newsSentiment.analyzeNewsReaction(score, c1m);
+    if (reaction) {
+      reactionHtml = `
+        <div class="news-reaction">
+          <strong>Price Reaction:</strong> ${reaction.insight}<br>
+          <span style="color:var(--muted)">5m move: <span style="color:${reaction.move5m>=0?'var(--green)':'var(--red)'}">${reaction.move5m>=0?'+':''}${reaction.move5m}%</span>
+          &nbsp;&bull;&nbsp; 15m move: <span style="color:${reaction.move15m>=0?'var(--green)':'var(--red)'}">${reaction.move15m>=0?'+':''}${reaction.move15m}%</span>
+          &nbsp;&bull;&nbsp; News direction: <strong>${reaction.newsDirection}</strong></span>
+        </div>`;
+    }
+  } catch(e) {}
+
+  const articles = (sentiment?.articles || []).map(a => {
+    const sc = a.sentScore || 0;
+    const sc_class = sc > 15 ? 'bull' : sc < -15 ? 'bear' : 'neut';
+    const sc_label = sc > 15 ? 'Bullish' : sc < -15 ? 'Bearish' : 'Neutral';
+    const age = a.time ? Math.round((Date.now() - a.time) / 60000) : null;
+    const ageStr = age !== null ? (age < 60 ? `${age}m ago` : `${Math.round(age/60)}h ago`) : '';
+    return `
+      <div class="news-article">
+        <div class="na-header">
+          <div class="na-headline">${a.headline || 'No headline'}${a.highImpact ? '<span class="na-high-impact">HIGH IMPACT</span>' : ''}</div>
+          <div class="na-sentiment ${sc_class}">${sc_label}</div>
+        </div>
+        <div class="na-meta">${a.source || 'News'}${ageStr ? ` &bull; ${ageStr}` : ''}</div>
+      </div>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="news-sentiment-bar">
+      <div class="sent-score ${scoreClass}">${score >= 0 ? '+' : ''}${score}</div>
+      <div>
+        <div class="sent-label"><span class="sent-dir">${sentiment?.label || 'Neutral'}</span> &bull; Impact: <strong>${sentiment?.impact || 'low'}</strong></div>
+        <div class="sent-summary">${sentiment?.summary || ''}</div>
+      </div>
+    </div>
+    ${reactionHtml}
+    <div class="news-articles">${articles || '<div style="color:var(--muted);font-size:12px;padding:10px 0">No recent articles found. Add a Finnhub API key in Settings for live news.</div>'}</div>`;
+}
+
+// ── Prediction card render (called from renderSignalCard) ─────────────────
+async function renderPrediction(symbol, cardEl) {
+  const pred = await window.predictionEngine.predict(symbol).catch(() => null);
+  if (!pred) return;
+
+  const dirClass = pred.direction;
+  const factorsHtml = (pred.factors || []).map(f => `
+    <div class="pred-factor ${f.direction}">
+      <span class="pred-factor-name">${f.name}</span>
+      <span class="pred-factor-val">${f.value}</span>
+    </div>`).join('');
+
+  const predHtml = `
+    <div class="sc-prediction">
+      <div class="pred-header">
+        <span class="pred-label">Next Move Prediction</span>
+        <span class="pred-dir ${dirClass}">${pred.direction}</span>
+        <span class="pred-conf">${pred.confidence}% conf.</span>
+      </div>
+      <div class="pred-factors">${factorsHtml}</div>
+      <div class="pred-time-hint">Horizon: ${pred.timeHorizon} &bull; Pattern: ${pred.pattern || 'None'}</div>
+    </div>`;
+
+  const aiEl = cardEl.querySelector('.sc-ai');
+  if (aiEl) {
+    const predEl = document.createElement('div');
+    predEl.innerHTML = predHtml;
+    aiEl.parentNode.insertBefore(predEl.firstElementChild, aiEl);
+  }
+}
+
+// ── Trade timeline render (called from renderSignalCard) ─────────────────
+async function renderTradeTimeline(signal, cardEl) {
+  try {
+    const c1m = await window.marketData.getCandles1m(signal.symbol, 30);
+    const tl  = window.predictionEngine.generateTradeTimeline(signal, c1m, 45);
+    if (!tl || !tl.timeline) return;
+
+    const openSegs  = tl.timeline.filter(t => t.status === 'open').length;
+    const tpSegs    = tl.timeline.filter(t => t.status === 'tp').length;
+    const slSegs    = tl.timeline.filter(t => t.status === 'sl').length;
+    const total     = tl.timeline.length;
+
+    const openPct  = (openSegs / total * 100).toFixed(1);
+    const tpPct    = (tpSegs  / total * 100).toFixed(1);
+    const slPct    = (slSegs  / total * 100).toFixed(1);
+
+    const timelineHtml = `
+      <div class="sc-timeline">
+        <div class="timeline-label">Trade Timeline (0–45 min) &bull; Estimated exit: <span class="timeline-est">${tl.predictedExit}</span></div>
+        <div class="timeline-track">
+          ${openSegs > 0 ? `<div class="timeline-seg open" style="flex:${openSegs}" title="Open (${openSegs} min)">OPEN</div>` : ''}
+          ${tpSegs   > 0 ? `<div class="timeline-seg tp"   style="flex:${tpSegs}"   title="TP Hit (${tpSegs} min)">TP</div>` : ''}
+          ${slSegs   > 0 ? `<div class="timeline-seg sl"   style="flex:${slSegs}"   title="SL Hit (${slSegs} min)">SL</div>` : ''}
+        </div>
+        <div class="timeline-meta">
+          <span>Entry ~now</span>
+          <span>Avg move/min: ${(tl.avgMovePerMin / (window.marketData.getPip?.(signal.symbol) || 0.0001)).toFixed(1)} pips</span>
+          <span>45 min</span>
+        </div>
+      </div>`;
+
+    const reasonsEl = cardEl.querySelector('.sc-reasons');
+    if (reasonsEl) {
+      const tlEl = document.createElement('div');
+      tlEl.innerHTML = timelineHtml;
+      reasonsEl.parentNode.insertBefore(tlEl.firstElementChild, reasonsEl);
+    }
+  } catch(e) {}
 }
 
 let toastTimer = null;

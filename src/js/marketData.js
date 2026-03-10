@@ -220,6 +220,13 @@ class MarketData {
   async getCandles1m(symbol, limit = 120) {
     const cacheKey = `${symbol}-1m`;
     const now = Date.now();
+
+    // WebSocket-streamed candles (crypto) are the freshest — check first
+    const live = this.cache1m[symbol];
+    if (live && live.candles.length > 0 && (now - live.ts) < this.CACHE_TTL_1M) {
+      return live.candles.slice(-limit);
+    }
+
     const cached = this.cache[cacheKey];
     if (cached && (now - cached.ts) < this.CACHE_TTL_1M) return cached.candles.slice(-limit);
 

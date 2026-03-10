@@ -50,8 +50,8 @@ class LearningEngine {
     if (!signal || !result) return;
     const uid = signal.uid || signal.id;
 
-    // Prevent duplicate recording
-    if (uid && this.trades.find(t => t.uid === uid && t.result !== 'pending')) return;
+    // Prevent duplicate recording for a uid that already has a final outcome
+    if (uid && this.trades.find(t => t.uid === uid)) return;
 
     const trade = {
       uid:        uid || `${signal.symbol}-${Date.now()}`,

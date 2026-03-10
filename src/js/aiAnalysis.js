@@ -24,6 +24,8 @@ class AIAnalyzer {
     const prompt = this._buildPrompt(signal, challenge);
     try {
       const result = await this._callGroq(prompt);
+      // Empty content (quota hit, model hiccup, etc.) — fall back with proper context
+      if (!result) return this._offlineReasoning(signal, challenge);
       this.cache[signal.id] = result;
       return result;
     } catch (e) {
@@ -53,7 +55,7 @@ class AIAnalyzer {
         body,
         headers: { Authorization: `Bearer ${this.apiKey}` },
       });
-      return res.choices?.[0]?.message?.content?.trim() || this._offlineReasoning({ reasons: [] });
+      return res.choices?.[0]?.message?.content?.trim() || '';
     }
     throw new Error('No fetch method available');
   }

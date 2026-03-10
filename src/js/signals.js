@@ -346,6 +346,207 @@ class TechnicalAnalysis {
     if (cur < e9[e9.length-1] && e9[e9.length-1] < e21[e21.length-1]) return 'bearish';
     return 'neutral';
   }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // ── TJR / Smart Money Concepts (SMC / ICT-based) ─────────────────────────
+  // Implements the core concepts used by popular trader TJR:
+  //   • Order Blocks (OB)  — institutional demand/supply zones
+  //   • Fair Value Gaps (FVG) — price imbalances that act as magnets
+  //   • Liquidity Sweeps   — stop hunts before the real move
+  //   • Market Structure   — BOS (Break of Structure) and CHoCH (Change of Character)
+  //   • Premium / Discount — buy below midrange, sell above midrange
+  // ════════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Order Block (OB) — the last opposing-direction candle before a significant
+   * displacement move. When price returns to this zone it often reacts strongly.
+   *
+   * Bullish OB: last bearish candle before a strong bullish impulse (>1.2 ATR)
+   * Bearish OB: last bullish candle before a strong bearish impulse (>1.2 ATR)
+   *
+   * Returns { type, top, bottom, strength } or { type: 'none' }
+   */
+  static orderBlock(candles, atr) {
+    if (candles.length < 10 || atr <= 0) return { type: 'none' };
+    const slice   = candles.slice(-50);
+    const current = slice[slice.length - 1].close;
+    const threshold = atr * 1.2;   // displacement requires at least 1.2× ATR body
+
+    for (let i = slice.length - 3; i >= 3; i--) {
+      const c    = slice[i];
+      const body = Math.abs(c.close - c.open);
+
+      // Bullish displacement: big bullish candle — look back for last bearish OB candle
+      if (c.close > c.open && body >= threshold) {
+        for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+          const ob = slice[j];
+          if (ob.close < ob.open) {  // bearish candle = bullish order block
+            const top    = Math.max(ob.open, ob.close);
+            const bottom = Math.min(ob.open, ob.close);
+            // Price must be AT or NEAR the OB (within 0.6 ATR to react)
+            if (current >= bottom - atr * 0.6 && current <= top + atr * 0.3) {
+              return { type: 'bullish', top, bottom, strength: Math.min(1, body / (atr * 3)) };
+            }
+            break;
+          }
+        }
+      }
+
+      // Bearish displacement: big bearish candle — look back for last bullish OB candle
+      if (c.open > c.close && body >= threshold) {
+        for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+          const ob = slice[j];
+          if (ob.close > ob.open) {  // bullish candle = bearish order block
+            const top    = Math.max(ob.open, ob.close);
+            const bottom = Math.min(ob.open, ob.close);
+            if (current >= bottom - atr * 0.3 && current <= top + atr * 0.6) {
+              return { type: 'bearish', top, bottom, strength: Math.min(1, body / (atr * 3)) };
+            }
+            break;
+          }
+        }
+      }
+    }
+    return { type: 'none' };
+  }
+
+  /**
+   * Fair Value Gap (FVG) — a 3-candle imbalance where the high of candle[i] and
+   * low of candle[i+2] don't overlap (or vice versa). Price tends to return to
+   * fill these gaps. TJR watches FVGs as high-probability re-entry zones.
+   *
+   * Returns { type: 'bullish'|'bearish'|'none', top, bottom, size }
+   */
+  static fairValueGap(candles, atr) {
+    if (candles.length < 5 || atr <= 0) return { type: 'none' };
+    const current = candles[candles.length - 1].close;
+    const minSize = atr * 0.25;   // FVG must be at least 0.25 ATR to be significant
+
+    // Search last 10 candle triplets for a valid FVG
+    const start = Math.max(0, candles.length - 12);
+    for (let i = candles.length - 3; i >= start; i--) {
+      const c1 = candles[i];
+      const c3 = candles[i + 2];
+
+      // Bullish FVG: c1.high < c3.low (gap between top of c1 and bottom of c3)
+      const bullGap = c3.low - c1.high;
+      if (bullGap >= minSize) {
+        // Price retracing INTO the gap = re-entry opportunity
+        if (current >= c1.high - atr * 0.1 && current <= c3.low + atr * 0.2) {
+          return { type: 'bullish', bottom: c1.high, top: c3.low, size: bullGap };
+        }
+      }
+
+      // Bearish FVG: c3.high < c1.low (gap between bottom of c1 and top of c3)
+      const bearGap = c1.low - c3.high;
+      if (bearGap >= minSize) {
+        if (current >= c3.high - atr * 0.2 && current <= c1.low + atr * 0.1) {
+          return { type: 'bearish', bottom: c3.high, top: c1.low, size: bearGap };
+        }
+      }
+    }
+    return { type: 'none' };
+  }
+
+  /**
+   * Liquidity Sweep — price wicks below a key low (or above a key high) grabbing
+   * stop orders, then reverses. This is TJR's #1 entry trigger: once the sweep
+   * candle closes back inside the range, the real move begins.
+   *
+   * Returns 'bullish' | 'bearish' | 'none'
+   */
+  static liquiditySweep(candles, atr) {
+    if (candles.length < 25 || atr <= 0) return 'none';
+    const lookback = 20;
+    const history  = candles.slice(-lookback - 2, -2);  // prior range (excluding sweep candle)
+    const sweepCandle  = candles[candles.length - 2];   // potential sweep candle
+    const currentCandle = candles[candles.length - 1];  // current candle confirming
+
+    const rangeLow  = Math.min(...history.map(c => c.low));
+    const rangeHigh = Math.max(...history.map(c => c.high));
+
+    // Bullish sweep: wick below range low but CLOSED above range low
+    // Confirmed by current candle being bullish (price already reversing)
+    if (sweepCandle.low < rangeLow - atr * 0.02 &&
+        sweepCandle.close > rangeLow &&
+        currentCandle.close > currentCandle.open) {
+      return 'bullish';
+    }
+
+    // Bearish sweep: wick above range high but CLOSED below range high
+    if (sweepCandle.high > rangeHigh + atr * 0.02 &&
+        sweepCandle.close < rangeHigh &&
+        currentCandle.close < currentCandle.open) {
+      return 'bearish';
+    }
+
+    return 'none';
+  }
+
+  /**
+   * Market Structure — TJR uses two key concepts:
+   *   BOS  (Break of Structure): price breaks a previous swing H/L in the SAME
+   *        direction as the trend — confirms trend continuation.
+   *   CHoCH (Change of Character): price breaks a swing H/L AGAINST the current
+   *        trend — first sign of reversal, highest probability setups.
+   *
+   * Returns { bos: 'bullish'|'bearish'|'none', choch: 'bullish'|'bearish'|'none' }
+   */
+  static marketStructure(candles) {
+    if (candles.length < 25) return { bos: 'none', choch: 'none' };
+    const slice = candles.slice(-35);
+    const current = slice[slice.length - 1].close;
+
+    // Identify swing highs and lows (3-bar pivot logic)
+    const swingH = [], swingL = [];
+    for (let i = 2; i < slice.length - 2; i++) {
+      const { high, low } = slice[i];
+      if (high > slice[i-1].high && high > slice[i-2].high &&
+          high > slice[i+1].high && high > slice[i+2].high) swingH.push(high);
+      if (low  < slice[i-1].low  && low  < slice[i-2].low  &&
+          low  < slice[i+1].low  && low  < slice[i+2].low)  swingL.push(low);
+    }
+
+    let bos = 'none', choch = 'none';
+    if (swingH.length < 2 || swingL.length < 2) return { bos, choch };
+
+    const lastH = swingH[swingH.length - 1], prevH = swingH[swingH.length - 2];
+    const lastL = swingL[swingL.length - 1], prevL = swingL[swingL.length - 2];
+
+    const isUptrend   = lastH > prevH && lastL > prevL;
+    const isDowntrend = lastH < prevH && lastL < prevL;
+
+    // BOS: break in direction of existing structure (continuation)
+    if (current > lastH && isUptrend)   bos = 'bullish';
+    if (current < lastL && isDowntrend) bos = 'bearish';
+
+    // CHoCH: break AGAINST existing structure (reversal — higher probability)
+    if (current > lastH && isDowntrend) choch = 'bullish';
+    if (current < lastL && isUptrend)   choch = 'bearish';
+
+    return { bos, choch };
+  }
+
+  /**
+   * Premium / Discount Zone — TJR core rule:
+   *   "Buy in Discount (below 50% of range), Sell in Premium (above 50%)"
+   * Uses the recent swing range to determine equilibrium.
+   *
+   * Returns 'premium' | 'discount' | 'equilibrium'
+   */
+  static premiumDiscount(candles, lookback = 30) {
+    if (candles.length < lookback) return 'equilibrium';
+    const slice   = candles.slice(-lookback);
+    const rangeHigh = Math.max(...slice.map(c => c.high));
+    const rangeLow  = Math.min(...slice.map(c => c.low));
+    const mid       = (rangeHigh + rangeLow) / 2;
+    const current   = candles[candles.length - 1].close;
+    const buffer    = (rangeHigh - rangeLow) * 0.05;  // 5% buffer around midline
+
+    if (current > mid + buffer)  return 'premium';
+    if (current < mid - buffer)  return 'discount';
+    return 'equilibrium';
+  }
 }
 
 // ── Signal Generator ──────────────────────────────────────────────────────────
@@ -353,10 +554,12 @@ class SignalEngine {
   constructor() {
     this.lastSignals = {};   // symbol -> { direction, ts }
     // Max possible raw score before brain bonuses.
-    // EMA(30) + 200EMA(5) + RSI(20) + MACD(20) + BB(10) + Stoch(5) + Volume(10)
-    // + Levels(5) + HTF(8) + Engulfing(25) + PinBar(20) + RSIDiv(15) + DblTop(15)
-    // + Doji@BB(10) = 198 pts max (brain bonuses are additive on top)
-    this.MAX_SCORE = 198;
+    // Classic TA:  EMA(30) + 200EMA(5) + RSI(20) + MACD(20) + BB(10) + Stoch(5)
+    //              + Volume(10) + Levels(5) + HTF(8) = 113
+    // Patterns:    Engulfing(25) + PinBar(20) + RSIDiv(15) + DblTop(15) + Doji@BB(10) = 85
+    // TJR / SMC:   OrderBlock(20) + FVG(15) + LiqSweep(18) + CHoCH(15) + PremDisc(8) = 76
+    // Total = 274 pts max (brain bonuses are additive on top of this)
+    this.MAX_SCORE = 274;
   }
 
   // ── Core signal generator: 1m primary, 5m context, brain-weighted ──────────
@@ -631,6 +834,75 @@ class SignalEngine {
       bullFeatures.push('bb_squeeze'); bearFeatures.push('bb_squeeze');
     }
 
+    // ── TJR / Smart Money Concepts ─────────────────────────────────────────
+    // Order Block (max 20 pts × strength multiplier)
+    const ob = TechnicalAnalysis.orderBlock(candles, atr);
+    if (ob.type === 'bullish') {
+      const pts = Math.round(20 * ob.strength * w('tjr_ob_bull'));
+      bullScore += pts; bullFeatures.push('tjr_ob_bull');
+      reasons.push(`Bullish Order Block at ${ob.bottom.toFixed(4)}–${ob.top.toFixed(4)} — institutional demand zone`);
+    } else if (ob.type === 'bearish') {
+      const pts = Math.round(20 * ob.strength * w('tjr_ob_bear'));
+      bearScore += pts; bearFeatures.push('tjr_ob_bear');
+      reasons.push(`Bearish Order Block at ${ob.bottom.toFixed(4)}–${ob.top.toFixed(4)} — institutional supply zone`);
+    }
+
+    // Fair Value Gap (15 pts)
+    const fvg = TechnicalAnalysis.fairValueGap(candles, atr);
+    if (fvg.type === 'bullish') {
+      const pts = Math.round(15 * w('tjr_fvg_bull'));
+      bullScore += pts; bullFeatures.push('tjr_fvg_bull');
+      reasons.push(`Bullish FVG ${fvg.bottom.toFixed(4)}–${fvg.top.toFixed(4)} — price retracing into imbalance`);
+    } else if (fvg.type === 'bearish') {
+      const pts = Math.round(15 * w('tjr_fvg_bear'));
+      bearScore += pts; bearFeatures.push('tjr_fvg_bear');
+      reasons.push(`Bearish FVG ${fvg.bottom.toFixed(4)}–${fvg.top.toFixed(4)} — price retracing into imbalance`);
+    }
+
+    // Liquidity Sweep (18 pts) — stop hunt then reversal
+    const sweep = TechnicalAnalysis.liquiditySweep(candles, atr);
+    if (sweep === 'bullish') {
+      const pts = Math.round(18 * w('tjr_sweep_bull'));
+      bullScore += pts; bullFeatures.push('tjr_sweep_bull');
+      reasons.push('Bullish liquidity sweep — stops cleared below, smart money entering long');
+    } else if (sweep === 'bearish') {
+      const pts = Math.round(18 * w('tjr_sweep_bear'));
+      bearScore += pts; bearFeatures.push('tjr_sweep_bear');
+      reasons.push('Bearish liquidity sweep — stops cleared above, smart money entering short');
+    }
+
+    // Market Structure: CHoCH (15 pts) > BOS (10 pts)
+    const ms = TechnicalAnalysis.marketStructure(candles);
+    if (ms.choch === 'bullish') {
+      const pts = Math.round(15 * w('tjr_choch_bull'));
+      bullScore += pts; bullFeatures.push('tjr_choch_bull');
+      reasons.push('CHoCH bullish — change of character, downtrend structure broken');
+    } else if (ms.choch === 'bearish') {
+      const pts = Math.round(15 * w('tjr_choch_bear'));
+      bearScore += pts; bearFeatures.push('tjr_choch_bear');
+      reasons.push('CHoCH bearish — change of character, uptrend structure broken');
+    } else if (ms.bos === 'bullish') {
+      const pts = Math.round(10 * w('tjr_bos_bull'));
+      bullScore += pts; bullFeatures.push('tjr_bos_bull');
+      reasons.push('BOS bullish — break of structure confirms uptrend continuation');
+    } else if (ms.bos === 'bearish') {
+      const pts = Math.round(10 * w('tjr_bos_bear'));
+      bearScore += pts; bearFeatures.push('tjr_bos_bear');
+      reasons.push('BOS bearish — break of structure confirms downtrend continuation');
+    }
+
+    // Premium / Discount zone (8 pts)
+    const pd = TechnicalAnalysis.premiumDiscount(candles);
+    if (pd === 'discount') {
+      const pts = Math.round(8 * w('tjr_discount'));
+      bullScore += pts; bullFeatures.push('tjr_discount');
+      reasons.push('Price in discount zone (<50% of range) — TJR optimal long entry area');
+    } else if (pd === 'premium') {
+      const pts = Math.round(8 * w('tjr_premium'));
+      bearScore += pts; bearFeatures.push('tjr_premium');
+      reasons.push('Price in premium zone (>50% of range) — TJR optimal short entry area');
+    }
+
     // ── Brain bonuses (applied after all manual indicators) ────────────────
     // Determine preliminary direction before applying bonuses
     const prelim      = bullScore >= bearScore ? 'BUY' : 'SELL';
@@ -703,11 +975,18 @@ class SignalEngine {
 
     // ── Pattern chip labels ────────────────────────────────────────────────
     const patterns = [];
-    if (engulf !== 'none')   patterns.push(engulf === 'bullish' ? 'Engulfing ▲' : 'Engulfing ▼');
-    if (pin    !== 'none')   patterns.push(pin    === 'bullish' ? 'Hammer'       : 'Shooting Star');
-    if (div    !== 'none')   patterns.push(div    === 'bullish' ? 'RSI Div ▲'    : 'RSI Div ▼');
-    if (dbl    !== 'none')   patterns.push(dbl    === 'bullish' ? 'Dbl Bottom'   : 'Dbl Top');
-    if (squeeze)             patterns.push('BB Squeeze');
+    if (engulf !== 'none')        patterns.push(engulf === 'bullish' ? 'Engulfing ▲'   : 'Engulfing ▼');
+    if (pin    !== 'none')        patterns.push(pin    === 'bullish' ? 'Hammer'         : 'Shooting Star');
+    if (div    !== 'none')        patterns.push(div    === 'bullish' ? 'RSI Div ▲'      : 'RSI Div ▼');
+    if (dbl    !== 'none')        patterns.push(dbl    === 'bullish' ? 'Dbl Bottom'     : 'Dbl Top');
+    if (squeeze)                  patterns.push('BB Squeeze');
+    // TJR / SMC chips
+    if (ob.type  !== 'none')      patterns.push(ob.type  === 'bullish' ? 'OB ▲'        : 'OB ▼');
+    if (fvg.type !== 'none')      patterns.push(fvg.type === 'bullish' ? 'FVG ▲'       : 'FVG ▼');
+    if (sweep    !== 'none')      patterns.push(sweep    === 'bullish' ? 'Liq Sweep ▲'  : 'Liq Sweep ▼');
+    if (ms.choch !== 'none')      patterns.push(ms.choch === 'bullish' ? 'CHoCH ▲'     : 'CHoCH ▼');
+    else if (ms.bos !== 'none')   patterns.push(ms.bos   === 'bullish' ? 'BOS ▲'       : 'BOS ▼');
+    if (pd !== 'equilibrium')     patterns.push(pd === 'discount' ? 'Discount Zone'    : 'Premium Zone');
 
     // ── Signal object ──────────────────────────────────────────────────────
     const timeframeLabel = is1m ? '1m' : (is5m ? '5m' : '1H');

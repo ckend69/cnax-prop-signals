@@ -157,12 +157,17 @@ class MarketData {
       });
       this.liveWs[symbol] = wsId;
     } else {
-      // Fallback: poll Binance REST every 10s for freshest tick
+      // Fallback: poll Binance REST every 10s for freshest tick (.com → .us)
       const poll = async () => {
-        try {
-          const data = await this._fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${inst.binance}`);
-          if (data?.price) this._emit(symbol, parseFloat(data.price));
-        } catch(e) {}
+        const hosts = this._binanceHost
+          ? [this._binanceHost]
+          : ['api.binance.com', 'api.binance.us'];
+        for (const host of hosts) {
+          try {
+            const data = await this._fetch(`https://${host}/api/v3/ticker/price?symbol=${inst.binance}`);
+            if (data?.price) { this._binanceHost = host; this._emit(symbol, parseFloat(data.price)); break; }
+          } catch(e) {}
+        }
       };
       poll();
       this.liveWs[symbol] = setInterval(poll, 10000);
@@ -319,21 +324,37 @@ class MarketData {
     return candles;
   }
 
-  // ── Binance REST (crypto) ─────────────────────────────────────────────────
+  // ── Binance REST (crypto) — tries .com then .us for geo-restriction fallback ──
+  // _binanceHost is cached after the first successful request to skip the failed host
   async _fetchBinance(pair, interval, limit) {
     const intMap = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '4h': '4h', '1d': '1d' };
-    const i = intMap[interval] || '1h';
-    const url = `https://api.binance.com/api/v3/klines?symbol=${pair}&interval=${i}&limit=${limit}`;
-    const data = await this._fetch(url);
-    if (!Array.isArray(data)) throw new Error('Bad Binance response');
-    return data.map(k => ({
-      time:   k[0],
-      open:   parseFloat(k[1]),
-      high:   parseFloat(k[2]),
-      low:    parseFloat(k[3]),
-      close:  parseFloat(k[4]),
-      volume: parseFloat(k[5]),
-    }));
+    const i    = intMap[interval] || '1h';
+    const path = `/api/v3/klines?symbol=${pair}&interval=${i}&limit=${limit}`;
+    const hosts = this._binanceHost
+      ? [this._binanceHost]
+      : ['api.binance.com', 'api.binance.us'];
+    for (const host of hosts) {
+      try {
+        const data = await this._fetch(`https://${host}${path}`);
+        if (Array.isArray(data)) {
+          this._binanceHost = host;  // cache the working host
+          return data.map(k => ({
+            time:   k[0],
+            open:   parseFloat(k[1]),
+            high:   parseFloat(k[2]),
+            low:    parseFloat(k[3]),
+            close:  parseFloat(k[4]),
+            volume: parseFloat(k[5]),
+          }));
+        }
+        console.warn(`Binance ${host}: ${data?.msg || 'non-array response'}`);
+        this._binanceHost = null;  // reset cache so next attempt tries both again
+      } catch(e) {
+        console.warn(`Binance ${host} unreachable:`, e.message);
+        this._binanceHost = null;
+      }
+    }
+    throw new Error('Binance unavailable (.com and .us both failed)');
   }
 
   // ── Alpha Vantage (forex hourly) ──────────────────────────────────────────

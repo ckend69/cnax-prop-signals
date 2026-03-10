@@ -1,5 +1,6 @@
 // backtester.js — Historical signal backtesting engine
 // Replays historical candle data through the signal engine and tracks performance.
+// Supports both 1m (live candles, forward-walk) and 1h (historical candles) modes.
 
 class Backtester {
   constructor() {
@@ -7,17 +8,22 @@ class Backtester {
   }
 
   // ── Run backtest for a single symbol ─────────────────────────────────────
-  // Default: 1h bars (the signal engine is designed for 1H timeframe).
-  // Daily bars are supported but produce wider SL/TP relative to bar noise.
+  // Default: 1m bars (matches live signal engine).
+  // 1h mode available for longer historical perspective.
   async runBacktest(symbol, options = {}) {
     const {
-      interval    = '1h',    // 1h is best match for the signal engine
-      lookback    = 500,     // ~3 months of hourly bars
-      riskPct     = 1,       // risk 1% per trade
+      interval    = '1m',    // 1m matches the live signal engine
+      lookback    = 300,     // bars for warm-up window
+      riskPct     = 1,
       accountSize = 50000,
     } = options;
 
-    // Request extra bars so we always have MIN_BARS for warm-up
+    // Route to 1m-specific path
+    if (interval === '1m') {
+      return this._runBacktest1m(symbol, { riskPct, accountSize });
+    }
+
+    // 1h historical path — request extra bars for warm-up
     const candles = await window.marketData.getHistoricalCandles(symbol, interval, lookback + 60);
     if (!candles || candles.length < 60) return null;
 
@@ -65,15 +71,74 @@ class Backtester {
     }
 
     if (trades.length === 0) return null;
+    return this._buildResult(symbol, interval, trades, equity, accountSize, maxDrawdown);
+  }
 
-    const wins      = trades.filter(t => t.outcome === 'win');
-    const losses    = trades.filter(t => t.outcome === 'loss');
-    const be        = trades.filter(t => t.outcome === 'breakeven');
-    const winRate   = (wins.length / trades.length) * 100;
-    const avgR      = trades.reduce((a, t) => a + t.rMultiple, 0) / trades.length;
-    const totalPnL  = equity - accountSize;
+  // ── 1m backtest: forward-walk through the live 1m candle window ───────────
+  // Fetches the current 300-bar 1m window and walks through it bar-by-bar,
+  // generating signals at each step and simulating outcomes 20 bars ahead.
+  // This gives a quick sanity-check of how the current engine performs on real data.
+  async _runBacktest1m(symbol, { riskPct = 1, accountSize = 50000 } = {}) {
+    const candles1m = await window.marketData.getCandles(symbol, '1m', 300);
+    if (!candles1m || candles1m.length < 60) return null;
+
+    const trades    = [];
+    const MIN_BARS  = 55;   // minimum bars for warm-up
+    const FORWARD   = 20;   // 20 × 1m bars to check for SL/TP
+
+    let equity      = accountSize;
+    let peakEquity  = accountSize;
+    let maxDrawdown = 0;
+
+    for (let i = MIN_BARS; i < candles1m.length - FORWARD; i++) {
+      const slice   = candles1m.slice(0, i + 1);
+      const ctx5m   = window.marketData._aggregate1mto5m(slice, 60);
+      const signal  = await window.signalEngine.generateSignal(
+        symbol, slice, ctx5m, { timeframe: '1m', skipLiveFetch: true }
+      );
+      if (!signal || signal.refreshed) continue;
+
+      const future  = candles1m.slice(i + 1, i + 1 + FORWARD);
+      const outcome = this._simulateTrade(signal, future, '1m');
+      if (!outcome) continue;
+
+      const riskDollars = equity * (riskPct / 100);
+      const pnlDollars  = riskDollars * outcome.rMultiple;
+      equity           += pnlDollars;
+      peakEquity        = Math.max(peakEquity, equity);
+      const dd          = (peakEquity - equity) / peakEquity * 100;
+      maxDrawdown       = Math.max(maxDrawdown, dd);
+
+      trades.push({
+        index:      i,
+        time:       candles1m[i].time,
+        direction:  signal.direction,
+        confidence: signal.confidence,
+        entry:      signal.entry,
+        sl:         signal.sl,
+        tp1:        signal.tp1,
+        outcome:    outcome.result,
+        rMultiple:  outcome.rMultiple,
+        pnlDollars: parseFloat(pnlDollars.toFixed(2)),
+        equity:     parseFloat(equity.toFixed(2)),
+        barsHeld:   outcome.barsHeld,
+      });
+    }
+
+    if (trades.length === 0) return null;
+    return this._buildResult(symbol, '1m', trades, equity, accountSize, maxDrawdown);
+  }
+
+  // ── Build result summary from trade list ──────────────────────────────────
+  _buildResult(symbol, interval, trades, equity, accountSize, maxDrawdown) {
+    const wins         = trades.filter(t => t.outcome === 'win');
+    const losses       = trades.filter(t => t.outcome === 'loss');
+    const be           = trades.filter(t => t.outcome === 'breakeven');
+    const winRate      = (wins.length / trades.length) * 100;
+    const avgR         = trades.reduce((a, t) => a + t.rMultiple, 0) / trades.length;
+    const totalPnL     = equity - accountSize;
     const profitFactor = losses.length > 0
-      ? wins.reduce((a, t)   => a + Math.abs(t.rMultiple), 0) /
+      ? wins.reduce((a, t) => a + Math.abs(t.rMultiple), 0) /
         losses.reduce((a, t) => a + Math.abs(t.rMultiple), 0)
       : wins.length > 0 ? 99 : 0;
 
@@ -94,7 +159,6 @@ class Backtester {
       trades:       trades.slice(-50),
       timestamp:    new Date(),
     };
-
     this.results[symbol] = result;
     return result;
   }

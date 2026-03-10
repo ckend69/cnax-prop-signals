@@ -347,6 +347,84 @@ class TechnicalAnalysis {
     return 'neutral';
   }
 
+  // ── VWAP (Volume-Weighted Average Price) ──────────────────────────────────
+  // Institutional benchmark — price reverts to VWAP intraday.
+  // Returns the VWAP price, or null if volume data is unavailable.
+  static vwap(candles) {
+    if (candles.length < 5) return null;
+    let cumTPV = 0, cumVol = 0;
+    for (const c of candles) {
+      const tp  = (c.high + c.low + c.close) / 3;
+      const vol = c.volume > 0 ? c.volume : 1;
+      cumTPV += tp * vol;
+      cumVol += vol;
+    }
+    return cumVol > 0 ? cumTPV / cumVol : null;
+  }
+
+  // ── Fibonacci OTE Zone (Optimal Trade Entry) ───────────────────────────────
+  // TJR's core entry rule: enter at 0.618–0.786 retracement of the most recent swing.
+  // Returns 'bullish' | 'bearish' | 'none'
+  static fibOTE(candles, atr) {
+    if (candles.length < 20 || atr <= 0) return 'none';
+    const slice   = candles.slice(-35);
+    const current = slice[slice.length - 1].close;
+    const highs   = slice.map(c => c.high);
+    const lows    = slice.map(c => c.low);
+    const swingH  = Math.max(...highs);
+    const swingL  = Math.min(...lows);
+    const range   = swingH - swingL;
+    if (range < atr * 1.0) return 'none';
+
+    const hiIdx = highs.indexOf(swingH);
+    const loIdx = lows.indexOf(swingL);
+
+    if (loIdx < hiIdx) {
+      // Swing low→high: retracing DOWN into OTE = bullish
+      const ote618 = swingH - range * 0.618;
+      const ote786 = swingH - range * 0.786;
+      if (current >= ote786 - atr * 0.15 && current <= ote618 + atr * 0.15) return 'bullish';
+    } else {
+      // Swing high→low: retracing UP into OTE = bearish
+      const ote618 = swingL + range * 0.618;
+      const ote786 = swingL + range * 0.786;
+      if (current >= ote618 - atr * 0.15 && current <= ote786 + atr * 0.15) return 'bearish';
+    }
+    return 'none';
+  }
+
+  // ── ICT Power of 3 (Accumulation → Manipulation → Distribution) ───────────
+  // Detects the 3-phase model: tight range → Judas swing → real directional move.
+  // Returns { phase, direction }
+  static powerOfThree(candles) {
+    if (candles.length < 30) return { phase: 'unknown', direction: 'none' };
+    const slice     = candles.slice(-30);
+    const early     = slice.slice(0, 10);
+    const mid       = slice.slice(10, 20);
+    const late      = slice.slice(20);
+    const rangeH    = Math.max(...early.map(c => c.high));
+    const rangeL    = Math.min(...early.map(c => c.low));
+    const rangeSize = rangeH - rangeL;
+    if (rangeSize <= 0) return { phase: 'unknown', direction: 'none' };
+
+    const midH      = Math.max(...mid.map(c => c.high));
+    const midL      = Math.min(...mid.map(c => c.low));
+    const lateClose = late[late.length - 1].close;
+    const lateOpen  = late[0].open;
+    const lateMove  = lateClose - lateOpen;
+
+    if (midL < rangeL - rangeSize * 0.05 && lateMove > rangeSize * 0.4 && lateClose > rangeH) {
+      return { phase: 'distribution', direction: 'bullish' };
+    }
+    if (midH > rangeH + rangeSize * 0.05 && lateMove < -rangeSize * 0.4 && lateClose < rangeL) {
+      return { phase: 'distribution', direction: 'bearish' };
+    }
+    if (midL < rangeL - rangeSize * 0.05 || midH > rangeH + rangeSize * 0.05) {
+      return { phase: 'manipulation', direction: 'none' };
+    }
+    return { phase: 'accumulation', direction: 'none' };
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   // ── TJR / Smart Money Concepts (SMC / ICT-based) ─────────────────────────
   // Implements the core concepts used by popular trader TJR:
@@ -558,8 +636,9 @@ class SignalEngine {
     //              + Volume(10) + Levels(5) + HTF(8) = 113
     // Patterns:    Engulfing(25) + PinBar(20) + RSIDiv(15) + DblTop(15) + Doji@BB(10) = 85
     // TJR / SMC:   OrderBlock(20) + FVG(15) + LiqSweep(18) + CHoCH(15) + PremDisc(8) = 76
-    // Total = 274 pts max (brain bonuses are additive on top of this)
-    this.MAX_SCORE = 274;
+    // New (v3):    KillZone(15) + VWAP(8) + FibOTE(18) + PO3(20) + Funding(12) + CurrStr(10) = 83
+    // Total = 357 pts max (brain bonuses are additive on top of this)
+    this.MAX_SCORE = 357;
   }
 
   // ── Core signal generator: 1m primary, 5m context, brain-weighted ──────────
@@ -571,8 +650,9 @@ class SignalEngine {
     const current = closes[closes.length - 1];
 
     // Brain weight getter — multiplies each indicator's point contribution
-    // by its observed win-rate factor (0.3×–2.0×). Defaults to 1.0 if no data yet.
-    const w = (feature) => window.brain?.getWeight(feature) ?? 1.0;
+    // by its observed win-rate factor (0.3×–2.0×). Uses per-symbol blend when available.
+    // Falls back to 1.0 if no data yet. Symbol-specific learning after 3+ outcomes.
+    const w = (feature) => window.brain?.getSymbolWeight(symbol, feature) ?? window.brain?.getWeight(feature) ?? 1.0;
 
     // Feature tracking — we collect which indicators fired in the winning direction
     // so the brain can learn which combos actually work.
@@ -903,6 +983,126 @@ class SignalEngine {
       reasons.push('Price in premium zone (>50% of range) — TJR optimal short entry area');
     }
 
+    // ── ICT Kill Zone (max 15 pts) ─────────────────────────────────────────
+    const kz = MarketData.getKillZone();
+    if (kz.boost > 0) {
+      if (bullScore >= bearScore) {
+        const pts = Math.round(kz.boost * w('kill_zone'));
+        bullScore += pts; bullFeatures.push('kill_zone');
+        reasons.push(`${kz.label} — inside high-probability ICT kill zone`);
+      } else {
+        const pts = Math.round(kz.boost * w('kill_zone'));
+        bearScore += pts; bearFeatures.push('kill_zone');
+        reasons.push(`${kz.label} — inside high-probability ICT kill zone`);
+      }
+    }
+
+    // ── VWAP confluence (max 8 pts) ────────────────────────────────────────
+    const vwapPrice = TechnicalAnalysis.vwap(candles);
+    if (vwapPrice && atr > 0) {
+      const dist = (current - vwapPrice) / atr;
+      if (dist > 0.2 && dist < 1.5) {
+        // Price above VWAP by 0.2–1.5 ATR = bullish momentum confirmation
+        const pts = Math.round(8 * w('vwap_above'));
+        bullScore += pts; bullFeatures.push('vwap_above');
+        reasons.push(`Price above VWAP (${vwapPrice.toFixed(4)}) — institutional buy-side bias`);
+      } else if (dist < -0.2 && dist > -1.5) {
+        const pts = Math.round(8 * w('vwap_below'));
+        bearScore += pts; bearFeatures.push('vwap_below');
+        reasons.push(`Price below VWAP (${vwapPrice.toFixed(4)}) — institutional sell-side bias`);
+      }
+    }
+
+    // ── Fibonacci OTE Zone (max 18 pts) ───────────────────────────────────
+    const ote = TechnicalAnalysis.fibOTE(candles, atr);
+    if (ote === 'bullish') {
+      const pts = Math.round(18 * w('fib_ote_bull'));
+      bullScore += pts; bullFeatures.push('fib_ote_bull');
+      reasons.push('Price in Fibonacci OTE zone (0.618–0.786) — optimal long entry level');
+    } else if (ote === 'bearish') {
+      const pts = Math.round(18 * w('fib_ote_bear'));
+      bearScore += pts; bearFeatures.push('fib_ote_bear');
+      reasons.push('Price in Fibonacci OTE zone (0.618–0.786) — optimal short entry level');
+    }
+
+    // ── ICT Power of 3 Distribution (max 20 pts) ──────────────────────────
+    const po3 = TechnicalAnalysis.powerOfThree(candles);
+    if (po3.phase === 'distribution') {
+      if (po3.direction === 'bullish') {
+        const pts = Math.round(20 * w('po3_bull'));
+        bullScore += pts; bullFeatures.push('po3_bull');
+        reasons.push('ICT Power of 3 — Judas swing complete, distribution phase bullish');
+      } else if (po3.direction === 'bearish') {
+        const pts = Math.round(20 * w('po3_bear'));
+        bearScore += pts; bearFeatures.push('po3_bear');
+        reasons.push('ICT Power of 3 — Judas swing complete, distribution phase bearish');
+      }
+    } else if (po3.phase === 'accumulation') {
+      reasons.push('ICT PO3 accumulation phase — awaiting manipulation before entry');
+    }
+
+    // ── Crypto Funding Rate (max 12 pts) ──────────────────────────────────
+    const fundingRate = options.fundingRate ?? null;
+    if (fundingRate !== null) {
+      const EXTREME_THRESHOLD = 0.0005;  // 0.05% per 8h = very extreme
+      const HIGH_THRESHOLD    = 0.00015; // 0.015% = elevated
+      if (fundingRate > EXTREME_THRESHOLD) {
+        // Extremely positive = crowded longs = bears have edge
+        const pts = Math.round(12 * w('funding_bear'));
+        bearScore += pts; bearFeatures.push('funding_bear');
+        reasons.push(`Funding rate ${(fundingRate * 100).toFixed(4)}% — extreme long crowding, short favoured`);
+      } else if (fundingRate < -EXTREME_THRESHOLD) {
+        // Extremely negative = crowded shorts = bulls have edge
+        const pts = Math.round(12 * w('funding_bull'));
+        bullScore += pts; bullFeatures.push('funding_bull');
+        reasons.push(`Funding rate ${(fundingRate * 100).toFixed(4)}% — extreme short crowding, long favoured`);
+      } else if (fundingRate > HIGH_THRESHOLD && bearScore > bullScore) {
+        const pts = Math.round(6 * w('funding_bear'));
+        bearScore += pts; bearFeatures.push('funding_bear');
+        reasons.push(`Elevated positive funding — slight short bias`);
+      } else if (fundingRate < -HIGH_THRESHOLD && bullScore > bearScore) {
+        const pts = Math.round(6 * w('funding_bull'));
+        bullScore += pts; bullFeatures.push('funding_bull');
+        reasons.push(`Elevated negative funding — slight long bias`);
+      }
+    }
+
+    // ── Currency Strength confluence (max 10 pts, forex only) ─────────────
+    const inst = window.INSTRUMENTS?.[symbol];
+    const strengths = options.currencyStrengths ?? null;
+    if (strengths && inst?.type === 'forex' && atr > 0) {
+      const baseCur  = inst.av || symbol.slice(0, 3);
+      const quoteCur = inst.quote || symbol.slice(3, 6);
+      const baseStr  = strengths[baseCur]  ?? 0;
+      const quoteStr = strengths[quoteCur] ?? 0;
+      const delta    = baseStr - quoteStr;  // positive = base strengthening vs quote
+
+      if (delta > 0.05 && bullScore >= bearScore) {
+        const pts = Math.round(10 * w('strength_bull'));
+        bullScore += pts; bullFeatures.push('strength_bull');
+        reasons.push(`${baseCur} strong vs ${quoteCur} — currency strength confirms BUY`);
+      } else if (delta < -0.05 && bearScore > bullScore) {
+        const pts = Math.round(10 * w('strength_bear'));
+        bearScore += pts; bearFeatures.push('strength_bear');
+        reasons.push(`${quoteCur} strong vs ${baseCur} — currency strength confirms SELL`);
+      }
+    }
+
+    // ── News suppression — penalise if high-impact event imminent ─────────
+    const newsEvents = options.newsEvents ?? [];
+    const relevantNews = newsEvents.filter(e => {
+      if (!inst) return e.minutesAway >= -2 && e.minutesAway <= 30;
+      const cur = e.currency || '';
+      return (cur === inst.av || cur === inst.quote || cur === 'USD') &&
+             e.minutesAway >= -2 && e.minutesAway <= 30;
+    });
+    if (relevantNews.length > 0) {
+      const ev = relevantNews[0];
+      const penalty = ev.minutesAway <= 5 ? 25 : 12;
+      bullScore -= penalty; bearScore -= penalty;  // penalise both sides
+      reasons.push(`⚠ ${ev.title} (${ev.currency}) in ~${Math.max(0, ev.minutesAway)} min — reduced confidence`);
+    }
+
     // ── Brain bonuses (applied after all manual indicators) ────────────────
     // Determine preliminary direction before applying bonuses
     const prelim      = bullScore >= bearScore ? 'BUY' : 'SELL';
@@ -981,12 +1181,18 @@ class SignalEngine {
     if (dbl    !== 'none')        patterns.push(dbl    === 'bullish' ? 'Dbl Bottom'     : 'Dbl Top');
     if (squeeze)                  patterns.push('BB Squeeze');
     // TJR / SMC chips
-    if (ob.type  !== 'none')      patterns.push(ob.type  === 'bullish' ? 'OB ▲'        : 'OB ▼');
-    if (fvg.type !== 'none')      patterns.push(fvg.type === 'bullish' ? 'FVG ▲'       : 'FVG ▼');
-    if (sweep    !== 'none')      patterns.push(sweep    === 'bullish' ? 'Liq Sweep ▲'  : 'Liq Sweep ▼');
-    if (ms.choch !== 'none')      patterns.push(ms.choch === 'bullish' ? 'CHoCH ▲'     : 'CHoCH ▼');
-    else if (ms.bos !== 'none')   patterns.push(ms.bos   === 'bullish' ? 'BOS ▲'       : 'BOS ▼');
-    if (pd !== 'equilibrium')     patterns.push(pd === 'discount' ? 'Discount Zone'    : 'Premium Zone');
+    if (ob.type  !== 'none')            patterns.push(ob.type  === 'bullish' ? 'OB ▲'         : 'OB ▼');
+    if (fvg.type !== 'none')            patterns.push(fvg.type === 'bullish' ? 'FVG ▲'        : 'FVG ▼');
+    if (sweep    !== 'none')            patterns.push(sweep    === 'bullish' ? 'Liq Sweep ▲'  : 'Liq Sweep ▼');
+    if (ms.choch !== 'none')            patterns.push(ms.choch === 'bullish' ? 'CHoCH ▲'      : 'CHoCH ▼');
+    else if (ms.bos !== 'none')         patterns.push(ms.bos   === 'bullish' ? 'BOS ▲'        : 'BOS ▼');
+    if (pd !== 'equilibrium')           patterns.push(pd === 'discount' ? 'Discount'          : 'Premium');
+    // New v3 chips
+    if (kz.boost > 0)                   patterns.push(kz.label);
+    if (ote !== 'none')                 patterns.push(ote === 'bullish' ? 'Fib OTE ▲'        : 'Fib OTE ▼');
+    if (po3.phase === 'distribution')   patterns.push(po3.direction === 'bullish' ? 'PO3 ▲'  : 'PO3 ▼');
+    if (po3.phase === 'accumulation')   patterns.push('PO3 Accum');
+    if (relevantNews.length > 0)        patterns.push('⚠ News');
 
     // ── Signal object ──────────────────────────────────────────────────────
     const timeframeLabel = is1m ? '1m' : (is5m ? '5m' : '1H');
@@ -1012,13 +1218,17 @@ class SignalEngine {
       stoch:       parseFloat(stoch.toFixed(1)),
       macd:        macdData,
       volume:      vol,
-      volRegime:   volReg,
-      trend4H:     htfTrend || 'none',
-      reasons:     reasons.slice(0, 8),
-      timestamp:   new Date(),
-      simulated:   candles[0]?.simulated || false,
-      timeframe:   timeframeLabel,
+      volRegime:      volReg,
+      trend4H:        htfTrend || 'none',
+      killZone:       kz.boost > 0 ? kz.label : null,
+      vwap:           vwapPrice ? parseFloat(vwapPrice.toFixed(5)) : null,
+      fundingRate:    fundingRate,
+      reasons:        reasons.slice(0, 10),
+      timestamp:      new Date(),
+      simulated:      candles[0]?.simulated || false,
+      timeframe:      timeframeLabel,
       timingHint,
+      previewCandles: candles.slice(-40),  // for mini chart rendering
     };
 
     // ── Deduplicate ────────────────────────────────────────────────────────
@@ -1032,11 +1242,23 @@ class SignalEngine {
 
   // ── Batch scan — crypto in parallel, forex/futures in small batches ────────
   async scanAll(symbols) {
+    // Pre-fetch shared context once per scan cycle (reduces API calls)
+    const [currencyStrengths, newsEvents] = await Promise.all([
+      window.marketData.getCurrencyStrengths().catch(() => null),
+      window.marketData.getUpcomingHighImpactEvents().catch(() => []),
+    ]);
+    const sharedCtx = { currencyStrengths, newsEvents };
+
+    if (newsEvents.length > 0) {
+      console.log(`Brain: ${newsEvents.length} high-impact news event(s) upcoming:`,
+        newsEvents.map(e => `${e.title} (${e.currency}) in ${e.minutesAway}min`).join(', '));
+    }
+
     const results = [];
     const cryptos = symbols.filter(s => window.INSTRUMENTS?.[s]?.type === 'crypto');
     const others  = symbols.filter(s => window.INSTRUMENTS?.[s]?.type !== 'crypto');
 
-    const cryptoSettled = await Promise.allSettled(cryptos.map(s => this._scanOne(s)));
+    const cryptoSettled = await Promise.allSettled(cryptos.map(s => this._scanOne(s, sharedCtx)));
     for (const o of cryptoSettled) {
       if (o.status === 'fulfilled' && o.value) results.push(o.value);
     }
@@ -1044,7 +1266,7 @@ class SignalEngine {
     const BATCH = 3;
     for (let i = 0; i < others.length; i += BATCH) {
       const batch   = others.slice(i, i + BATCH);
-      const settled = await Promise.allSettled(batch.map(s => this._scanOne(s)));
+      const settled = await Promise.allSettled(batch.map(s => this._scanOne(s, sharedCtx)));
       for (const o of settled) {
         if (o.status === 'fulfilled' && o.value) results.push(o.value);
       }
@@ -1054,10 +1276,12 @@ class SignalEngine {
     return results.sort((a, b) => b.confidence - a.confidence);
   }
 
-  // ── Scan one symbol: 1m primary + 5m context ──────────────────────────────
+  // ── Scan one symbol: 1m primary + 5m context + all enrichment data ────────
   // 300 bars × 1m = 5 hours of 1m data — sufficient for all indicators.
   // 5m context (aggregated from 1m) provides HTF trend confirmation.
-  async _scanOne(sym) {
+  // Funding rate, currency strengths, news events, and kill zone are fetched
+  // once per scan cycle and injected via options to avoid redundant API calls.
+  async _scanOne(sym, sharedCtx = {}) {
     try {
       const candles1m = await window.marketData.getCandles(sym, '1m', 300);
       if (!candles1m || candles1m.length < 50) return null;
@@ -1065,7 +1289,17 @@ class SignalEngine {
       // Aggregate 5m bars from 1m for higher-timeframe context (no extra API call)
       const candles5m = window.marketData._aggregate1mto5m(candles1m, 60);
 
-      return await this.generateSignal(sym, candles1m, candles5m, { timeframe: '1m' });
+      // Funding rate — only for crypto
+      const fundingRate = window.INSTRUMENTS?.[sym]?.type === 'crypto'
+        ? await window.marketData.getFundingRate(sym).catch(() => null)
+        : null;
+
+      return await this.generateSignal(sym, candles1m, candles5m, {
+        timeframe:         '1m',
+        fundingRate,
+        currencyStrengths: sharedCtx.currencyStrengths ?? null,
+        newsEvents:        sharedCtx.newsEvents        ?? [],
+      });
     } catch(e) {
       console.warn(`Signal scan failed for ${sym}:`, e.message);
       return null;

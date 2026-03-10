@@ -1,4 +1,4 @@
-// newsSentiment.js — Market news fetching, sentiment scoring, and price reaction analysis
+// newsSentiment.js — Market news fetching, sentiment scoring, ForexFactory calendar, and price reaction analysis
 
 // Maps instruments to their Finnhub/news category keywords
 const NEWS_TOPICS = {
@@ -311,3 +311,91 @@ class NewsSentiment {
 }
 
 window.newsSentiment = new NewsSentiment();
+
+// ── ForexFactory calendar support ─────────────────────────────────────────────
+// Country currency codes → instruments that care about that country's events
+const FF_COUNTRY_MAP = {
+  'USD': ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','XAUUSD','ES','NQ','YM','RTY','CL','GC','MNQ','MES','BTCUSDT','ETHUSDT','SOLUSDT'],
+  'EUR': ['EURUSD'],
+  'GBP': ['GBPUSD','GBPJPY'],
+  'JPY': ['USDJPY','GBPJPY'],
+  'AUD': ['AUDUSD'],
+  'CAD': ['USDCAD'],
+  'XAU': ['XAUUSD','GC'],
+  'CNY': ['BTCUSDT','ETHUSDT','SOLUSDT'],  // China PMI moves crypto
+  'CNH': ['BTCUSDT'],
+};
+
+// Augment NewsSentiment with ForexFactory methods
+Object.assign(NewsSentiment.prototype, {
+
+  // ── Fetch this week's ForexFactory calendar (cached 5 min) ───────────────
+  async getForexFactoryCalendar() {
+    const now = Date.now();
+    if (this._ffCache && now - this._ffCache.ts < 5 * 60 * 1000) {
+      return this._ffCache.events;
+    }
+
+    try {
+      const data = await window.marketData._fetch(
+        'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
+      );
+      if (!Array.isArray(data)) return [];
+
+      const events = data.map(e => ({
+        title:    e.title   || '',
+        country:  (e.country || '').toUpperCase(),
+        date:     e.date    || '',
+        time:     e.time    || '',
+        impact:   e.impact  || 'Low',      // 'High' | 'Medium' | 'Low' | 'Holiday'
+        forecast: e.forecast || '',
+        previous: e.previous || '',
+        actual:   e.actual   || '',
+        ts:       this._ffParseTime(e.date, e.time),
+      }));
+
+      this._ffCache = { events, ts: now };
+      return events;
+    } catch(e) {
+      console.warn('ForexFactory fetch failed:', e.message);
+      return this._ffCache?.events || [];
+    }
+  },
+
+  // ── Parse FF date/time string to unix ms ──────────────────────────────────
+  _ffParseTime(date, time) {
+    try {
+      // FF format: date = "01-13-2025", time = "8:30am" (ET) or "All Day"
+      if (!date || !time || time === 'All Day' || time === 'Tentative') {
+        return new Date(date || Date.now()).getTime();
+      }
+      // Convert to UTC by assuming Eastern Time (UTC-5 / UTC-4 DST)
+      // We just want approximate time for "upcoming in N hours" logic
+      const dt = new Date(`${date} ${time} EST`);
+      return isNaN(dt.getTime()) ? Date.now() : dt.getTime();
+    } catch { return Date.now(); }
+  },
+
+  // ── Get upcoming events for a symbol within hoursAhead ───────────────────
+  async getUpcomingEvents(symbol, hoursAhead = 24) {
+    const events = await this.getForexFactoryCalendar();
+    const now    = Date.now();
+    const cutoff = now + hoursAhead * 3600000;
+
+    // Which countries matter for this symbol?
+    const relevantCountries = new Set();
+    for (const [country, instruments] of Object.entries(FF_COUNTRY_MAP)) {
+      if (instruments.includes(symbol)) relevantCountries.add(country);
+    }
+    if (relevantCountries.size === 0) return [];
+
+    return events
+      .filter(e => {
+        if (!relevantCountries.has(e.country)) return false;
+        if (e.ts < now - 3600000) return false;   // skip events > 1h in past
+        if (e.ts > cutoff) return false;
+        return e.impact === 'High' || e.impact === 'Medium';
+      })
+      .sort((a, b) => a.ts - b.ts);
+  },
+});

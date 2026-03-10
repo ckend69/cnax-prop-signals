@@ -113,7 +113,8 @@
       background: var(--muted);
       animation: none;
     }
-    .status-dot.live { background: var(--green); animation: pulse 2s infinite; }
+    .status-dot.live     { background: var(--green); animation: pulse 2s infinite; }
+    .status-dot.scanning { background: var(--cyan);  animation: pulse .8s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
     .tb-btn {
@@ -290,6 +291,85 @@
     .indicator-chip.bull { color: var(--green); }
     .indicator-chip.bear { color: var(--red); }
     .indicator-chip.neutral { color: var(--muted); }
+    .indicator-chip.pattern-chip {
+      color: var(--amber); border-color: rgba(245,158,11,.35);
+      background: rgba(245,158,11,.08); font-weight: 700;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       RISK SNAPSHOT / MONEY MANAGEMENT
+    ═══════════════════════════════════════════════════ */
+    .sc-money {
+      background: rgba(99,102,241,.05); border: 1px solid rgba(99,102,241,.15);
+      border-radius: 9px; padding: 10px 12px; margin-bottom: 10px;
+    }
+    .sc-money-header {
+      font-size: 10px; font-weight: 700; color: var(--primary);
+      text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px;
+    }
+    .money-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px;
+      margin-bottom: 8px;
+    }
+    .money-item { display: flex; flex-direction: column; gap: 2px; }
+    .money-lbl  { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .money-val  { font-size: 13px; font-weight: 800; font-family: var(--mono); }
+    .money-val.risk   { color: var(--red); }
+    .money-val.reward { color: var(--green); }
+    .money-val.neutral{ color: var(--cyan); }
+    .money-val.amber  { color: var(--amber); }
+    .money-tip {
+      font-size: 11px; color: var(--muted); line-height: 1.5;
+      border-top: 1px solid rgba(255,255,255,.05); padding-top: 7px; margin-top: 2px;
+    }
+    .money-tip strong { color: var(--text); }
+
+    /* ═══════════════════════════════════════════════════
+       RULES / MONEY CHEAT SHEET VIEW
+    ═══════════════════════════════════════════════════ */
+    .rules-wrap { padding: 0 4px; overflow-y: auto; flex: 1; }
+    .rules-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; margin-bottom: 14px;
+    }
+    .rules-section-title {
+      font-size: 13px; font-weight: 800; color: var(--text); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rules-section-title .rs-icon {
+      width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center;
+      justify-content: center; font-size: 13px; flex-shrink: 0;
+    }
+    .rules-limit-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .rules-limit-item {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .rules-limit-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
+    .rules-limit-val   { font-size: 15px; font-weight: 800; font-family: var(--mono); }
+    .rules-limit-val.green  { color: var(--green); }
+    .rules-limit-val.red    { color: var(--red); }
+    .rules-limit-val.amber  { color: var(--amber); }
+    .rules-limit-val.cyan   { color: var(--cyan); }
+    .concept-card {
+      display: flex; gap: 12px; align-items: flex-start; padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+    }
+    .concept-card:last-child { border-bottom: none; padding-bottom: 0; }
+    .concept-icon {
+      width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 16px; flex-shrink: 0;
+    }
+    .concept-body {}
+    .concept-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+    .concept-desc  { font-size: 11px; color: var(--muted); line-height: 1.55; }
+    .concept-formula {
+      display: inline-block; font-family: var(--mono); font-size: 11px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 8px; color: var(--cyan); margin-top: 4px;
+    }
 
     .sc-ai {
       background: rgba(99,102,241,.06);
@@ -319,6 +399,192 @@
       color: var(--cyan); padding: 4px 10px; border-radius: 6px;
     }
     .sc-time { font-size: 10px; color: var(--muted2); }
+
+    /* ═══════════════════════════════════════════════════
+       OUTCOME BUTTONS (WIN / LOSS / SKIP)
+    ═══════════════════════════════════════════════════ */
+    .outcome-btns { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+    .outcome-btn {
+      flex: 1; padding: 5px 0; border: none; border-radius: 7px; font-size: 11px;
+      font-weight: 700; cursor: pointer; transition: opacity .15s, transform .1s;
+      letter-spacing: .04em;
+    }
+    .outcome-btn:hover { opacity: .85; transform: translateY(-1px); }
+    .outcome-btn:active { transform: translateY(0); }
+    .outcome-btn.win-btn  { background: rgba(0,255,136,.15); color: var(--green); border: 1px solid rgba(0,255,136,.35); }
+    .outcome-btn.loss-btn { background: rgba(239,68,68,.15);  color: var(--red);   border: 1px solid rgba(239,68,68,.35); }
+    .outcome-btn.skip-btn { background: rgba(100,116,139,.12); color: var(--muted); border: 1px solid var(--border); }
+    .outcome-btn.active-win  { background: rgba(0,255,136,.3);  color: var(--green); box-shadow: 0 0 0 2px var(--green); }
+    .outcome-btn.active-loss { background: rgba(239,68,68,.3);  color: var(--red);   box-shadow: 0 0 0 2px var(--red); }
+    .outcome-btn.active-skip { background: rgba(100,116,139,.25); color: var(--muted); box-shadow: 0 0 0 2px var(--border); }
+    .learn-adj-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+      background: rgba(99,102,241,.15); color: var(--primary); border: 1px solid rgba(99,102,241,.25);
+    }
+
+    /* ═══════════════════════════════════════════════════
+       FOREX FACTORY EVENTS
+    ═══════════════════════════════════════════════════ */
+    .sc-ff-events { margin-bottom: 8px; }
+    .ff-event-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,.04); font-size: 11px;
+    }
+    .ff-event-row:last-child { border-bottom: none; }
+    .ff-impact { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .ff-impact.High   { background: var(--red); }
+    .ff-impact.Medium { background: var(--amber); }
+    .ff-impact.Low    { background: var(--muted2); }
+    .ff-time { color: var(--muted); min-width: 52px; font-family: var(--mono); font-size: 10px; }
+    .ff-country { color: var(--cyan); font-weight: 700; min-width: 28px; font-size: 10px; }
+    .ff-title { color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ff-forecast { color: var(--muted); font-size: 10px; white-space: nowrap; }
+
+    /* ═══════════════════════════════════════════════════
+       JOURNAL VIEW
+    ═══════════════════════════════════════════════════ */
+    .journal-wrap { padding: 0 4px; }
+    .journal-stat-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px;
+    }
+    .journal-stat {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; text-align: center;
+    }
+    .journal-stat .jstat-val { font-size: 22px; font-weight: 800; color: var(--text); }
+    .journal-stat .jstat-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .07em; }
+    .journal-sect-title {
+      font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .07em; margin: 16px 0 8px;
+    }
+    .journal-sym-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; margin-bottom: 16px;
+    }
+    .journal-sym-row {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .journal-sym-row .sym-name { font-size: 13px; font-weight: 700; color: var(--text); }
+    .journal-sym-row .sym-stats { font-size: 11px; color: var(--muted); }
+    .journal-adj-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 12px;
+    }
+    .journal-trade-row {
+      display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+      background: var(--surface); border-radius: 8px; font-size: 11px; margin-bottom: 5px;
+    }
+    .jt-result { font-weight: 700; min-width: 40px; }
+    .jt-result.win  { color: var(--green); }
+    .jt-result.loss { color: var(--red); }
+    .jt-result.skip { color: var(--muted); }
+    .journal-clear-btn {
+      background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.25);
+      color: var(--red); border-radius: 8px; padding: 6px 14px; font-size: 12px;
+      font-weight: 700; cursor: pointer; transition: opacity .15s;
+    }
+    .journal-clear-btn:hover { opacity: .75; }
+
+    /* ═══════════════════════════════════════════════════
+       BRAIN BADGE (signal cards)
+    ═══════════════════════════════════════════════════ */
+    .brain-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.3);
+      color: #a855f7; border-radius: 6px; padding: 2px 7px;
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       BRAIN TILE (animated learning panel)
+    ═══════════════════════════════════════════════════ */
+    #brain-view {
+      flex: 1; overflow-y: auto; padding: 16px;
+    }
+    .brain-wrap { padding: 0 4px; }
+    .brain-hero {
+      background: linear-gradient(135deg, rgba(168,85,247,.12), rgba(0,212,255,.06));
+      border: 1px solid rgba(168,85,247,.25); border-radius: 14px;
+      padding: 20px; margin-bottom: 16px; position: relative; overflow: hidden;
+    }
+    .brain-hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 60% 40% at 80% 50%, rgba(168,85,247,.08), transparent);
+      pointer-events: none;
+    }
+    .brain-hero-title {
+      font-size: 18px; font-weight: 900; color: var(--text);
+      display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+    }
+    .brain-pulse {
+      width: 12px; height: 12px; border-radius: 50%; background: #a855f7;
+      box-shadow: 0 0 0 0 rgba(168,85,247,.6);
+      animation: brainPulse 2s ease infinite;
+    }
+    @keyframes brainPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(168,85,247,.7); }
+      70%  { box-shadow: 0 0 0 10px rgba(168,85,247,0); }
+      100% { box-shadow: 0 0 0 0 rgba(168,85,247,0); }
+    }
+    .brain-hero-sub { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .brain-stat-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px;
+    }
+    .brain-stat {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; text-align: center;
+    }
+    .brain-stat .bs-val { font-size: 20px; font-weight: 800; color: #a855f7; }
+    .brain-stat .bs-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .07em; }
+    .brain-sect-title {
+      font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .07em; margin: 14px 0 8px;
+    }
+    .brain-feat-table {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; margin-bottom: 14px;
+    }
+    .brain-feat-row {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; align-items: center;
+      padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.04); font-size: 11px;
+    }
+    .brain-feat-row:last-child { border-bottom: none; }
+    .brain-feat-row.header { background: rgba(255,255,255,.02); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .brain-feat-name { color: var(--text); font-family: var(--mono); font-size: 10px; }
+    .brain-weight-bar {
+      height: 4px; border-radius: 2px; background: rgba(255,255,255,.06); position: relative; width: 100%;
+    }
+    .brain-weight-fill {
+      position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px;
+      transition: width .6s ease;
+    }
+    .brain-activity-log {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px; font-family: var(--mono); font-size: 10px; color: var(--muted);
+      max-height: 180px; overflow-y: auto; line-height: 1.7;
+    }
+    .brain-log-entry { color: #a855f7; }
+    .brain-log-win  { color: var(--green); }
+    .brain-log-loss { color: var(--red); }
+    .brain-reset-btn {
+      background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.2);
+      color: var(--red); border-radius: 8px; padding: 6px 14px; font-size: 12px;
+      font-weight: 700; cursor: pointer; transition: opacity .15s;
+    }
+    .brain-reset-btn:hover { opacity: .75; }
+    /* Animated synapse lines in brain hero */
+    .brain-synapse-wrap {
+      position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+      width: 80px; height: 60px; opacity: .4;
+    }
+    .synapse-dot {
+      position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #a855f7;
+      animation: synapsePop 3s ease-in-out infinite;
+    }
+    @keyframes synapsePop {
+      0%, 100% { transform: scale(1); opacity: .4; }
+      50%       { transform: scale(1.8); opacity: 1; }
+    }
 
     /* ═══════════════════════════════════════════════════
        EMPTY / LOADING STATES
@@ -572,8 +838,8 @@
       <div class="status-dot" id="status-dot"></div>
       <span id="status-text">Initializing…</span>
     </div>
-    <button class="tb-btn" onclick="openSettings()">⚙ Settings</button>
-    <button class="tb-btn primary" onclick="startScan()" id="scan-top-btn" disabled>⚡ Scan Markets</button>
+    <button class="tb-btn" onclick="openSettings()">Settings</button>
+    <button class="tb-btn primary" onclick="startScan()" id="scan-top-btn">⟳ Rescan</button>
   </header>
 
   <!-- ── SIDEBAR ───────────────────────────────────────────────────────── -->
@@ -671,12 +937,13 @@
     <!-- Nav -->
     <div style="flex:1"></div>
     <div style="border-top:1px solid var(--border)">
-      <div class="nav-item active" id="nav-signals"   onclick="setView('signals')">📡 Live Signals</div>
-      <div class="nav-item"        id="nav-bias"      onclick="setView('bias')">🧭 Daily Bias</div>
-      <div class="nav-item"        id="nav-backtest"  onclick="setView('backtest')">📊 Backtest</div>
-      <div class="nav-item"        id="nav-news"      onclick="setView('news')">📰 Market News</div>
-      <div class="nav-item"        id="nav-journal"   onclick="setView('journal')">📓 Trade Journal</div>
-      <div class="nav-item"        id="nav-rules"     onclick="setView('rules')">📋 Firm Rules</div>
+      <div class="nav-item active" id="nav-signals"   onclick="setView('signals')">Live Signals</div>
+      <div class="nav-item"        id="nav-brain"     onclick="setView('brain')" style="color:#a855f7">🧠 Brain</div>
+      <div class="nav-item"        id="nav-bias"      onclick="setView('bias')">Daily Bias</div>
+      <div class="nav-item"        id="nav-backtest"  onclick="setView('backtest')">Backtest</div>
+      <div class="nav-item"        id="nav-news"      onclick="setView('news')">Market News</div>
+      <div class="nav-item"        id="nav-journal"   onclick="setView('journal')">Trade Journal</div>
+      <div class="nav-item"        id="nav-rules"     onclick="setView('rules')">Firm Rules</div>
     </div>
   </aside>
 
@@ -684,8 +951,8 @@
   <main class="main">
     <div class="main-header">
       <div class="mh-left">
-        <button class="scan-btn" id="scan-btn" onclick="startScan()" disabled>
-          <span id="scan-icon">⚡</span> Scan Markets
+        <button class="scan-btn" id="scan-btn" onclick="startScan()">
+          <span id="scan-icon"></span> <span id="scan-label">Rescan</span>
         </button>
         <div class="filter-tabs">
           <button class="tab active" id="tab-all"   onclick="setFilter('all')">All</button>
@@ -697,17 +964,15 @@
         </div>
       </div>
       <div class="mh-right">
-        Auto-refresh: <strong id="refresh-label" style="color:var(--text)">Off</strong>
+        <span id="countdown-label" style="color:var(--muted);font-size:12px;">—</span>
         &nbsp;|&nbsp; Last scan: <span class="last-scan" id="last-scan-time">—</span>
       </div>
     </div>
 
     <div class="signal-feed" id="signal-feed">
       <div class="empty-state">
-        <div class="empty-icon">📡</div>
-        <div class="empty-title">Ready to Scan</div>
-        <div class="empty-sub">Click "Scan Markets" to generate AI-powered signals for your prop firm challenge. Covers Forex, Futures, and Crypto.</div>
-        <button class="scan-btn" onclick="startScan()" id="scan-cta" disabled style="margin-top:8px;">⚡ Scan Markets</button>
+        <div class="empty-title">Auto-Scanning…</div>
+        <div class="empty-sub">Markets are being scanned automatically. Signals will appear here shortly. Use <strong>⟳ Rescan</strong> to trigger an instant refresh.</div>
       </div>
     </div>
   </main>
@@ -717,7 +982,7 @@
 <!-- ── SETTINGS OVERLAY ──────────────────────────────────────────────────── -->
 <div class="overlay" id="settings-overlay">
   <div class="panel">
-    <h2>⚙ Settings</h2>
+    <h2>Settings</h2>
 
     <div class="field">
       <label>Groq API Key (AI Analysis)</label>
@@ -768,7 +1033,7 @@
     </div>
 
     <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:12px;font-size:11px;color:#fcd34d;margin-top:4px;">
-      ⚠️ <strong>Disclaimer:</strong> CNAX Prop Signals provides algorithmic trading signals for educational and informational purposes only. Signals do not constitute financial advice. Past signal performance does not guarantee future results. Trading involves significant risk of loss. Always use proper risk management.
+      <strong>Disclaimer:</strong> CNAX Prop Signals provides algorithmic trading signals for educational and informational purposes only. Signals do not constitute financial advice. Past signal performance does not guarantee future results. Trading involves significant risk of loss. Always use proper risk management.
     </div>
 
     <div class="panel-btns">
@@ -789,11 +1054,10 @@
         <div style="font-size:15px;font-weight:700;">Daily Momentum Bias</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px;">Intraday directional bias based on gap, VWAP, EMA stack &amp; 30m momentum</div>
       </div>
-      <button class="scan-bias-btn" id="bias-scan-btn" onclick="runDailyBias()">&#9654; Compute Bias</button>
+      <button class="scan-bias-btn" id="bias-scan-btn" onclick="runDailyBias()">Compute Bias</button>
     </div>
     <div id="bias-cards" class="bias-cards">
       <div class="empty-state" style="grid-column:1/-1;height:200px;">
-        <div class="empty-icon">🧭</div>
         <div class="empty-title">No Bias Data</div>
         <div class="empty-sub">Click "Compute Bias" to analyze today's directional setup for all instruments.</div>
       </div>
@@ -819,20 +1083,19 @@
         <option value="EURUSD">EURUSD</option>
         <option value="GBPUSD">GBPUSD</option>
       </select>
-      <select class="bt-select" id="bt-interval">
+      <select class="bt-select" id="bt-interval" onchange="updateBtLookback()">
+        <option value="1h" selected>Hourly bars (recommended)</option>
         <option value="1d">Daily bars</option>
-        <option value="1h">Hourly bars</option>
       </select>
       <select class="bt-select" id="bt-lookback">
-        <option value="252">1 Year (252 bars)</option>
-        <option value="126">6 Months</option>
-        <option value="60">3 Months</option>
+        <option value="500" selected>~3 Months (500 bars)</option>
+        <option value="250">~6 Weeks (250 bars)</option>
+        <option value="120">~3 Weeks (120 bars)</option>
       </select>
-      <button class="bt-run-btn" id="bt-run-btn" onclick="runBacktest()">&#9654; Run Backtest</button>
+      <button class="bt-run-btn" id="bt-run-btn" onclick="runBacktest()">Run Backtest</button>
     </div>
     <div id="bt-results" class="bt-results">
       <div class="empty-state" style="height:180px;">
-        <div class="empty-icon">📊</div>
         <div class="empty-title">No Backtest Run</div>
         <div class="empty-sub">Select a symbol and click "Run Backtest" to replay historical signals.</div>
       </div>
@@ -848,12 +1111,11 @@
         <div style="font-size:15px;font-weight:700;">Market News &amp; Sentiment</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px;">News sentiment analysis + how the market is reacting to current events</div>
       </div>
-      <button class="fetch-news-btn" onclick="fetchNews()">&#8635; Refresh News</button>
+      <button class="fetch-news-btn" onclick="fetchNews()">Refresh News</button>
     </div>
     <div class="news-symbol-tabs" id="news-tabs"></div>
     <div id="news-sentiment-area">
       <div class="empty-state" style="height:160px;">
-        <div class="empty-icon">📰</div>
         <div class="empty-title">No News Data</div>
         <div class="empty-sub">Add a Finnhub API key in Settings to enable live news sentiment (free tier). Without a key, rule-based keyword scoring is used.</div>
       </div>
@@ -868,14 +1130,19 @@
 <script src="js/aiAnalysis.js"></script>
 <script src="js/backtester.js"></script>
 <script src="js/newsSentiment.js"></script>
+<script src="js/brain.js"></script>
+<script src="js/learningEngine.js"></script>
 <script src="js/prediction.js"></script>
 <script>
 // ── App State ──────────────────────────────────────────────────────────────
 let challenge = new ChallengeState();
 let signals   = [];
 let filter    = 'all';
-let scanning  = false;
-let refreshTimer = null;
+let scanning       = false;
+let refreshTimer   = null;
+let countdownTimer = null;
+let nextScanAt     = 0;
+const AUTO_SCAN_MS = 5 * 60 * 1000;   // auto-rescan every 5 minutes
 let settings = {
   groqKey:     '',
   avKey:       '',
@@ -898,8 +1165,11 @@ document.addEventListener('DOMContentLoaded', () => {
   populateFirmUI();
   updateChallengeUI();
 
-  setStatus('live', 'Ready');
+  setStatus('scanning', 'Starting auto-scan…');
   enableScanBtns(true);
+
+  // Auto-start: begin first scan 1 second after UI is ready
+  setTimeout(startScan, 1000);
 });
 
 // ── Settings ────────────────────────────────────────────────────────────────
@@ -945,9 +1215,13 @@ function saveSettings() {
   settings.crypto   = document.getElementById('set-crypto').checked;
 
   localStorage.setItem('cnax-settings', JSON.stringify(settings));
+  // Clear all caches so new API keys take effect immediately on next scan
+  if (window.marketData) { window.marketData.cache = {}; window.marketData.cache1m = {}; }
+  if (window.newsSentiment) window.newsSentiment.cache = {};
+  if (window.predictionEngine) window.predictionEngine.cache = {};
   applySettings();
   closeSettings();
-  toast('Settings saved', 'success');
+  toast('Settings saved — cache cleared, ready to scan with live data', 'success');
 }
 
 // ── Firm UI ──────────────────────────────────────────────────────────────────
@@ -1040,11 +1314,11 @@ function updateChallengeUI() {
   const badge = document.getElementById('challenge-badge');
   const statusMap = {
     ACTIVE:      ['badge-active',  '● CHALLENGE ACTIVE'],
-    WARNING:     ['badge-warning', '⚠ MODERATE DRAWDOWN'],
-    DANGER:      ['badge-danger',  '🔥 HIGH DRAWDOWN RISK'],
-    DAILY_LIMIT: ['badge-danger',  '🚫 DAILY LIMIT HIT'],
-    BREACHED:    ['badge-danger',  '❌ CHALLENGE BREACHED'],
-    PASSED:      ['badge-passed',  '🏆 PHASE PASSED!'],
+    WARNING:     ['badge-warning', 'MODERATE DRAWDOWN'],
+    DANGER:      ['badge-danger',  'HIGH DRAWDOWN RISK'],
+    DAILY_LIMIT: ['badge-danger',  'DAILY LIMIT HIT'],
+    BREACHED:    ['badge-danger',  'CHALLENGE BREACHED'],
+    PASSED:      ['badge-passed',  'PHASE PASSED!'],
   };
   const [cls, txt] = statusMap[c.status] || statusMap.ACTIVE;
   badge.className = `challenge-badge ${cls}`;
@@ -1106,7 +1380,11 @@ async function startScan() {
   if (scanning) return;
   scanning = true;
   enableScanBtns(false);
-  setStatus('live', 'Scanning markets…');
+  setStatus('scanning', 'Scanning markets…');
+  // Pause the countdown while scanning
+  if (countdownTimer) clearInterval(countdownTimer);
+  const el = document.getElementById('countdown-label');
+  if (el) el.textContent = 'Scanning…';
   showLoadingState();
 
   try {
@@ -1114,7 +1392,7 @@ async function startScan() {
     const raw  = await window.signalEngine.scanAll(syms);
     const filtered = raw.filter(s => s.confidence >= settings.minConf);
 
-    // Enrich with AI analysis
+    // Enrich with AI analysis + brain outcome scheduling
     for (const sig of filtered.slice(0, 8)) {
       sig.aiAnalysis = await window.aiAnalyzer.analyzeSignal(sig, challenge);
       // Validate against challenge rules
@@ -1128,12 +1406,18 @@ async function startScan() {
         sl:         sig.sl,
         riskAmount: challenge.safeRiskPerTrade,
       });
+      // Schedule autonomous outcome check 18 minutes after signal (brain learning)
+      if (!sig.refreshed && sig.features && sig.features.length > 0) {
+        window.brain?.scheduleOutcomeCheck(sig, 18 * 60 * 1000);
+      }
     }
 
     signals = filtered;
     document.getElementById('last-scan-time').textContent = new Date().toLocaleTimeString();
     setStatus('live', `${signals.length} signal${signals.length !== 1 ? 's' : ''} found`);
     renderSignals();
+    // Refresh brain tile with latest stats
+    renderBrainTile();
 
     if (signals.length > 0) toast(`${signals.length} signal${signals.length !== 1 ? 's' : ''} found`, 'success');
     else toast('No high-confidence signals at this time', 'info');
@@ -1145,6 +1429,8 @@ async function startScan() {
   } finally {
     scanning = false;
     enableScanBtns(true);
+    // Schedule the next automatic scan after each scan completes
+    scheduleRefresh();
   }
 }
 
@@ -1157,14 +1443,35 @@ function showLoadingState() {
     </div>`;
 }
 
+// ── Auto-scan scheduler ───────────────────────────────────────────────────
+// Schedules the next scan and starts the visual countdown.
 function scheduleRefresh() {
-  if (refreshTimer) clearInterval(refreshTimer);
-  if (settings.refresh > 0) {
-    refreshTimer = setInterval(() => { if (!scanning) startScan(); }, settings.refresh * 60 * 1000);
-    document.getElementById('refresh-label').textContent = `${settings.refresh}m`;
-  } else {
-    document.getElementById('refresh-label').textContent = 'Off';
+  if (refreshTimer)   clearInterval(refreshTimer);
+  if (countdownTimer) clearInterval(countdownTimer);
+
+  nextScanAt   = Date.now() + AUTO_SCAN_MS;
+  refreshTimer = setInterval(() => {
+    if (!scanning) startScan();
+  }, AUTO_SCAN_MS);
+
+  startCountdown(AUTO_SCAN_MS);
+}
+
+// Tick every second showing "Next scan in M:SS"
+function startCountdown(ms) {
+  if (countdownTimer) clearInterval(countdownTimer);
+  nextScanAt = Date.now() + ms;
+
+  function tick() {
+    const remaining = Math.max(0, nextScanAt - Date.now());
+    const m = Math.floor(remaining / 60000);
+    const s = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
+    const el = document.getElementById('countdown-label');
+    if (el) el.textContent = `Next scan in ${m}:${s}`;
+    if (remaining <= 0) clearInterval(countdownTimer);
   }
+  tick();
+  countdownTimer = setInterval(tick, 1000);
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -1191,19 +1498,20 @@ function renderSignals() {
   });
 
   if (!visible.length) {
-    feed.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No ${filter} signals</div><div class="empty-sub">Try a different filter or scan again.</div></div>`;
+    feed.innerHTML = `<div class="empty-state"><div class="empty-title">No ${filter} signals</div><div class="empty-sub">Try a different filter or scan again.</div></div>`;
     return;
   }
 
   feed.innerHTML = visible.map(s => renderCard(s)).join('');
 
-  // Async-enrich each card with prediction + timeline (non-blocking)
+  // Async-enrich each card with prediction + timeline + FF events (non-blocking)
   visible.forEach(s => {
     const cardId  = `card-${s.id || s.symbol + s.direction}`.replace(/[^a-z0-9-]/gi, '_');
     const cardEl  = feed.querySelector(`[data-card-id="${cardId}"]`);
     if (!cardEl) return;
     renderPrediction(s.symbol, cardEl).catch(() => {});
     renderTradeTimeline(s, cardEl).catch(() => {});
+    renderFFEvents(s, cardEl).catch(() => {});
   });
 }
 
@@ -1228,12 +1536,55 @@ function renderCard(s) {
                  inst?.type === 'crypto'  ? `${s.posSize} coins` :
                  `${s.posSize} lots`;
 
-  const blocked = s.blocked ? '<div class="sc-warning">🚫 DO NOT TRADE — Daily limit reached</div>' : '';
+  const blocked = s.blocked ? '<div class="sc-warning">DO NOT TRADE — Daily limit reached</div>' : '';
 
-  const timingTag = s.timingHint ? `<span class="timeframe-badge" style="color:var(--amber)">⏱ ${s.timingHint}</span>` : '';
+  const timingTag = s.timingHint ? `<span class="timeframe-badge" style="color:var(--amber)">${s.timingHint}</span>` : '';
+  const uid = s.uid || cardId;
+  const safeUid = uid.replace(/['"]/g, '');
+
+  // Learning adjustment badge
+  const learnBadge = s.learnAdj
+    ? `<span class="learn-adj-badge">${s.learnAdj > 0 ? '+' : ''}${s.learnAdj} adj</span>`
+    : '';
+
+  // Brain bonus badge
+  const brainBadge = s.brainBonus
+    ? `<span class="brain-badge">🧠 ${s.brainBonus > 0 ? '+' : ''}${s.brainBonus}</span>`
+    : (s.features?.length > 0 ? `<span class="brain-badge" style="opacity:.5">🧠 ${s.features.length}f</span>` : '');
+
+  // Outcome button state from learning engine
+  const existingOutcome = window.learningEngine?.getOutcome(uid);
+  const winActive  = existingOutcome === 'win'  ? 'active-win'  : '';
+  const lossActive = existingOutcome === 'loss' ? 'active-loss' : '';
+  const skipActive = existingOutcome === 'skip' ? 'active-skip' : '';
+
+  // ── Money Management calculations ─────────────────────────────────────────
+  const riskAmt    = challenge?.safeRiskPerTrade || 0;
+  const rrNum      = parseFloat(s.rrRatio) || 2;
+  const rewardAmt  = riskAmt * rrNum;
+  // Break-even win rate: how many wins needed to cover losses at this R:R
+  // Formula: 1 / (1 + R:R) — e.g., 2:1 → 33%, 2.2:1 → 31%
+  const breakEvenWR = Math.ceil((1 / (1 + rrNum)) * 100);
+  // Trades-to-profitability phrasing: "win 1 in every N"
+  const winsIn = Math.round(100 / breakEvenWR);
+
+  // Pip value for forex position (approximate: standard lot = $10/pip USD-quoted)
+  let pipValStr = '';
+  if (inst?.type === 'forex' && s.posSize > 0) {
+    const ppv = inst.quote === 'JPY'
+      ? parseFloat((s.posSize * 9.0).toFixed(2))     // JPY pairs
+      : parseFloat((s.posSize * 10.0).toFixed(2));   // USD-quoted
+    pipValStr = `$${ppv}/pip`;
+  } else if (inst?.type === 'futures' && s.posSize > 0) {
+    const tickVal = window.marketData?.getTickVal?.(s.symbol) || 10;
+    pipValStr = `$${tickVal}/tick`;
+  }
+
+  // Contextual money management tip (stable per signal, varies by symbol)
+  const moneyTip = getMoneyTip(s, rrNum, breakEvenWR);
 
   return `
-  <div class="signal-card ${cls}" data-card-id="${cardId}" ${s.blocked ? 'style="opacity:.5"' : ''}>
+  <div class="signal-card ${cls}" data-card-id="${cardId}" data-uid="${safeUid}" ${s.blocked ? 'style="opacity:.5"' : ''}>
     <div class="sc-header">
       <div class="sc-left">
         ${dirBdg}
@@ -1241,6 +1592,8 @@ function renderCard(s) {
         <span class="timeframe-badge">${s.timeframe}</span>
         <span class="timeframe-badge" style="color:var(--primary)">${typeTag}</span>
         ${timingTag}
+        ${learnBadge}
+        ${brainBadge}
       </div>
       ${ring}
     </div>
@@ -1270,11 +1623,36 @@ function renderCard(s) {
       <span class="indicator-chip ${volCls}">Vol: ${s.volume}</span>
       <span class="indicator-chip neutral">ATR ${fmt(s.atr)}</span>
       <span class="indicator-chip neutral">RR ${s.rrRatio}:1</span>
+      ${(s.patterns || []).map(p => `<span class="indicator-chip pattern-chip">${p}</span>`).join('')}
     </div>
+
+    <!-- Risk Snapshot — money management panel -->
+    <div class="sc-money">
+      <div class="sc-money-header">⚖ Risk Snapshot</div>
+      <div class="money-grid">
+        <div class="money-item">
+          <div class="money-lbl">Max Risk</div>
+          <div class="money-val risk">${riskAmt > 0 ? `$${riskAmt.toFixed(0)}` : '—'}</div>
+        </div>
+        <div class="money-item">
+          <div class="money-lbl">Reward @ TP1</div>
+          <div class="money-val reward">${rewardAmt > 0 ? `$${rewardAmt.toFixed(0)}` : '—'}</div>
+        </div>
+        <div class="money-item">
+          <div class="money-lbl">Break-even WR</div>
+          <div class="money-val neutral">${breakEvenWR}% <span style="font-size:10px;color:var(--muted)">(1 in ${winsIn})</span></div>
+        </div>
+        ${pipValStr ? `<div class="money-item"><div class="money-lbl">Tick / Pip Value</div><div class="money-val amber">${pipValStr} × ${s.posSize}</div></div>` : ''}
+      </div>
+      <div class="money-tip">${moneyTip}</div>
+    </div>
+
+    <!-- ForexFactory events placeholder (filled async) -->
+    <div class="sc-ff-events" id="ff-${cardId}"></div>
 
     ${s.aiAnalysis ? `
     <div class="sc-ai">
-      <div class="ai-label">🤖 AI Analysis</div>
+      <div class="ai-label">AI Analysis</div>
       ${s.aiAnalysis}
     </div>` : ''}
 
@@ -1286,12 +1664,19 @@ function renderCard(s) {
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         ${blocked}
         ${warnings}
-        ${!s.blocked && s.posSize ? `<div class="pos-size-chip">⚡ Suggested: ${posStr}</div>` : ''}
+        ${!s.blocked && s.posSize ? `<div class="pos-size-chip">Suggested: ${posStr}</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         ${s.simulated ? '<span class="sc-sim-badge">SIMULATED DATA</span>' : ''}
         <span class="sc-time">${new Date(s.timestamp).toLocaleTimeString()}</span>
       </div>
+    </div>
+
+    <!-- Outcome recording buttons -->
+    <div class="outcome-btns">
+      <button class="outcome-btn win-btn  ${winActive}"  onclick="markResult('${safeUid}','win')">✓ WIN</button>
+      <button class="outcome-btn loss-btn ${lossActive}" onclick="markResult('${safeUid}','loss')">✗ LOSS</button>
+      <button class="outcome-btn skip-btn ${skipActive}" onclick="markResult('${safeUid}','skip')">— SKIP</button>
     </div>
   </div>`;
 }
@@ -1326,16 +1711,23 @@ function setStatus(state, text) {
 }
 
 function enableScanBtns(on) {
-  ['scan-btn','scan-top-btn','scan-cta'].forEach(id => {
+  ['scan-btn','scan-top-btn'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.disabled = !on;
+    if (!el) return;
+    el.disabled = !on;
+    el.style.opacity = on ? '' : '0.6';
   });
-  const icon = document.getElementById('scan-icon');
-  if (icon) icon.textContent = on ? '⚡' : '⏳';
+  // Update label text and spinner icon
+  const icon  = document.getElementById('scan-icon');
+  const label = document.getElementById('scan-label');
+  const topBtn = document.getElementById('scan-top-btn');
+  if (icon)   icon.textContent  = on ? '' : '⟳';
+  if (label)  label.textContent = on ? 'Rescan' : 'Scanning…';
+  if (topBtn) topBtn.textContent = on ? '⟳ Rescan' : '⟳ Scanning…';
 }
 
 // ── Active view management ────────────────────────────────────────────────
-const VIEW_IDS = ['signals', 'bias', 'backtest', 'news', 'journal', 'rules'];
+const VIEW_IDS = ['signals', 'brain', 'bias', 'backtest', 'news', 'journal', 'rules'];
 let currentView = 'signals';
 
 function setView(v) {
@@ -1343,24 +1735,31 @@ function setView(v) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById(`nav-${v}`)?.classList.add('active');
 
-  // Hide all views
-  document.querySelector('.signal-feed')?.closest('.main')?.querySelectorAll('[data-view]').forEach(el => {
-    el.style.display = 'none';
+  const signalFeed  = document.querySelector('.signal-feed');
+  const mainHeader  = document.querySelector('.main-header');
+
+  // Hide signal feed and header for non-signal views
+  if (signalFeed) signalFeed.style.display = v === 'signals' ? 'flex' : 'none';
+  if (mainHeader) mainHeader.style.display  = v === 'signals' ? ''    : 'none';
+
+  // Hide all dynamic views
+  ['bias-view','backtest-view','news-view','brain-view'].forEach(id => {
+    const d = document.getElementById(id);
+    if (d) d.style.display = 'none';
   });
-  document.querySelector('.signal-feed')?.style.setProperty('display', v === 'signals' ? 'flex' : 'none');
-  document.querySelector('.main-header')?.style.setProperty('display', v === 'signals' ? '' : 'none');
-  document.querySelectorAll('.journal-view, .rules-view').forEach(el => {
-    el.classList.remove('active');
-  });
+  const journalEl = document.getElementById('journal-view');
+  if (journalEl) journalEl.style.display = 'none';
+  const rulesEl = document.getElementById('rules-view');
+  if (rulesEl) rulesEl.style.display = 'none';
 
   if (v === 'signals') {
-    document.querySelector('.signal-feed').style.display = 'flex';
-    document.querySelector('.main-header').style.display = '';
+    // already shown above
+  } else if (v === 'brain') {
+    renderBrainTile();
   } else if (v === 'journal') {
-    document.querySelector('.journal-view')?.classList.add('active');
     renderJournal();
   } else if (v === 'rules') {
-    document.querySelector('.rules-view')?.classList.add('active');
+    _ensureRulesView();
   } else {
     // Dynamic views: bias, backtest, news
     _ensureDynamicView(v);
@@ -1377,12 +1776,168 @@ function _ensureDynamicView(v) {
     main.appendChild(frag);
     el = document.getElementById(`${v}-view`);
   }
-  // Hide other dynamic views
-  ['bias-view','backtest-view','news-view'].forEach(id => {
-    const d = document.getElementById(id);
-    if (d) d.style.display = id === `${v}-view` ? 'flex' : 'none';
-  });
   if (el) el.style.display = 'flex';
+}
+
+function _ensureRulesView() {
+  const main = document.querySelector('.main');
+  let el = document.getElementById('rules-view');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'rules-view';
+    el.style.cssText = 'flex:1;overflow-y:auto;padding:16px;';
+    main.appendChild(el);
+  }
+  el.style.display = 'block';
+  el.innerHTML = _buildRulesHTML();
+}
+
+function _buildRulesHTML() {
+  // ── Active challenge limits ────────────────────────────────────────────────
+  const firmName  = challenge.firmKey?.toUpperCase() || '—';
+  const phase     = ['Phase 1','Phase 2','Funded'][challenge.currentPhase] || 'Phase 1';
+  const bal       = challenge.balance || challenge.accountSize;
+  const profTgt   = challenge.profitTargetAmt?.toFixed(0)  || '—';
+  const maxDD     = challenge.maxLossAmt?.toFixed(0)        || '—';
+  const dailyDD   = challenge.dailyLossAmt?.toFixed(0)      || '—';
+  const safeR     = challenge.safeRiskPerTrade?.toFixed(0)  || '—';
+  const ddFloor   = challenge.maxDrawdownFloor?.toFixed(0)  || '—';
+
+  return `
+  <div class="rules-wrap">
+    <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:14px;">
+      Firm Rules &amp; Money Management
+    </div>
+
+    <!-- Active challenge limits -->
+    <div class="rules-section">
+      <div class="rules-section-title">
+        <span class="rs-icon" style="background:rgba(99,102,241,.15);color:var(--primary);">📋</span>
+        ${firmName} — ${phase} (Account $${(bal||0).toLocaleString()})
+      </div>
+      <div class="rules-limit-grid">
+        <div class="rules-limit-item">
+          <div class="rules-limit-label">Profit Target</div>
+          <div class="rules-limit-val green">$${profTgt}</div>
+        </div>
+        <div class="rules-limit-item">
+          <div class="rules-limit-label">Max Drawdown Floor</div>
+          <div class="rules-limit-val red">$${ddFloor} min balance</div>
+        </div>
+        <div class="rules-limit-item">
+          <div class="rules-limit-label">Max Total Drawdown</div>
+          <div class="rules-limit-val red">$${maxDD}</div>
+        </div>
+        <div class="rules-limit-item">
+          <div class="rules-limit-label">Daily Loss Limit</div>
+          <div class="rules-limit-val amber">$${dailyDD}</div>
+        </div>
+        <div class="rules-limit-item">
+          <div class="rules-limit-label">Safe Risk / Trade</div>
+          <div class="rules-limit-val cyan">$${safeR}</div>
+        </div>
+        <div class="rules-limit-item">
+          <div class="rules-limit-label">Current Balance</div>
+          <div class="rules-limit-val green">$${(bal||0).toLocaleString()}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Money Management Cheat Sheet -->
+    <div class="rules-section">
+      <div class="rules-section-title">
+        <span class="rs-icon" style="background:rgba(0,255,136,.1);color:var(--green);">💰</span>
+        Money Management Fundamentals
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(239,68,68,.12);color:var(--red);">🛡</div>
+        <div class="concept-body">
+          <div class="concept-title">The 1–2% Rule — Never Risk More</div>
+          <div class="concept-desc">Risk only 1–2% of your account on any single trade. At 1%, you survive <strong>100 consecutive losses</strong> before losing your account. Bigger risk per trade = faster ruin, not faster profit.</div>
+          <div class="concept-formula">Risk per trade = Account × 0.01 (1%)</div>
+        </div>
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(99,102,241,.12);color:var(--primary);">📐</div>
+        <div class="concept-body">
+          <div class="concept-title">Position Sizing — Always Math, Never Gut</div>
+          <div class="concept-desc">Position size is calculated so that if price hits your stop loss, you lose <em>exactly</em> your planned risk — nothing more. The formula converts dollar risk into lots/contracts.</div>
+          <div class="concept-formula">Lots = Risk $ ÷ (SL pips × pip value)</div>
+        </div>
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(245,158,11,.12);color:var(--amber);">⚖</div>
+        <div class="concept-body">
+          <div class="concept-title">Risk:Reward Ratio — Why 2:1 is the Minimum</div>
+          <div class="concept-desc">At 2:1 R:R you need only a <strong>34% win rate</strong> to break even. At 1:1 R:R you need 50%. Always target at least 2× reward vs risk. Better setups = higher R:R = fewer wins required.</div>
+          <div class="concept-formula">Break-even WR = 1 ÷ (1 + R:R) × 100%</div>
+        </div>
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(0,212,255,.12);color:var(--cyan);">🎯</div>
+        <div class="concept-body">
+          <div class="concept-title">Break-Even Trade — Move SL After +1R</div>
+          <div class="concept-desc">Once price moves <strong>+1R in your direction</strong> (equal to your stop loss distance), move your stop loss to your entry price. Worst case: scratch trade. Eliminates the "gave back profit" scenario.</div>
+          <div class="concept-formula">Break-even SL = Entry price (after +1R move)</div>
+        </div>
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(0,255,136,.12);color:var(--green);">✂</div>
+        <div class="concept-body">
+          <div class="concept-title">Partial Close — Take Half at TP1</div>
+          <div class="concept-desc">At TP1, close 50% of your position and move SL to entry. The remaining 50% rides free toward TP2 with zero risk. This locks in real money while letting winners run — the best of both worlds.</div>
+          <div class="concept-formula">Close 50% @ TP1 → move SL to entry → hold 50% to TP2</div>
+        </div>
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(239,68,68,.12);color:var(--red);">📉</div>
+        <div class="concept-body">
+          <div class="concept-title">Drawdown Math — Losses Hurt More Than They Look</div>
+          <div class="concept-desc">A 10% loss needs 11% gain to recover. A 20% loss needs 25%. A 50% loss needs <strong>100%</strong>. Small consistent losses compound into catastrophic holes. Keep single-trade losses small.</div>
+          <div class="concept-formula">Recovery needed = 1 ÷ (1 − loss%) − 1</div>
+        </div>
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(245,158,11,.12);color:var(--amber);">🛑</div>
+        <div class="concept-body">
+          <div class="concept-title">Daily Stop — Quit After 2–3 Losses</div>
+          <div class="concept-desc">If you take 2–3 consecutive losses in a day, <strong>stop trading</strong>. Revenge trading on a bad day is the fastest path to a blown account. Bad days happen; protect what you have left.</div>
+          <div class="concept-formula">Max daily loss = Daily limit (${dailyDD ? '$'+dailyDD : 'set by firm'})</div>
+        </div>
+      </div>
+
+      <div class="concept-card">
+        <div class="concept-icon" style="background:rgba(99,102,241,.12);color:var(--primary);">📈</div>
+        <div class="concept-body">
+          <div class="concept-title">Compounding — Risk % Not Fixed $</div>
+          <div class="concept-desc">Risk 1% of your <em>current</em> balance each trade, not a fixed dollar amount. As your account grows, your risk grows proportionally — this is how small accounts turn into large ones without blowing up.</div>
+          <div class="concept-formula">Risk $ = Current balance × 0.01 (recalculate each trade)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick reference table -->
+    <div class="rules-section">
+      <div class="rules-section-title">
+        <span class="rs-icon" style="background:rgba(0,212,255,.1);color:var(--cyan);">📊</span>
+        R:R Quick Reference — Win Rate Needed to Profit
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        ${[[1,50],[1.5,40],[2.0,34],[2.2,31],[2.5,29],[3.0,25],[3.5,22],[4.0,20]].map(([rr,wr]) => `
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:13px;font-weight:800;color:var(--cyan);font-family:var(--mono)">${rr}:1</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Win &gt; ${wr}%</div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
 }
 
 // ── Daily Bias ────────────────────────────────────────────────────────────
@@ -1423,17 +1978,34 @@ async function runDailyBias() {
     }
   }
 
-  if (btn) { btn.disabled = false; btn.textContent = '▶ Compute Bias'; }
+  if (btn) { btn.disabled = false; btn.textContent = 'Compute Bias'; }
 }
 
 // ── Backtest ──────────────────────────────────────────────────────────────
+function updateBtLookback() {
+  const iv  = document.getElementById('bt-interval')?.value;
+  const sel = document.getElementById('bt-lookback');
+  if (!sel) return;
+  if (iv === '1h') {
+    sel.innerHTML = `
+      <option value="500" selected>~3 Months (500 bars)</option>
+      <option value="250">~6 Weeks (250 bars)</option>
+      <option value="120">~3 Weeks (120 bars)</option>`;
+  } else {
+    sel.innerHTML = `
+      <option value="252" selected>1 Year (252 bars)</option>
+      <option value="126">6 Months (126 bars)</option>
+      <option value="60">3 Months (60 bars)</option>`;
+  }
+}
+
 async function runBacktest() {
   const btn = document.getElementById('bt-run-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
 
   const sym      = document.getElementById('bt-sym')?.value || 'NQ';
-  const interval = document.getElementById('bt-interval')?.value || '1d';
-  const lookback = parseInt(document.getElementById('bt-lookback')?.value || '252');
+  const interval = document.getElementById('bt-interval')?.value || '1h';
+  const lookback = parseInt(document.getElementById('bt-lookback')?.value || '500');
   const results  = document.getElementById('bt-results');
 
   if (results) results.innerHTML = '<div class="empty-state" style="height:140px;"><div class="spinner"></div><div style="margin-top:8px;color:var(--muted)">Running walk-forward backtest…</div></div>';
@@ -1483,7 +2055,7 @@ async function runBacktest() {
     }
   }
 
-  if (btn) { btn.disabled = false; btn.textContent = '▶ Run Backtest'; }
+  if (btn) { btn.disabled = false; btn.textContent = 'Run Backtest'; }
 }
 
 // ── News Sentiment ─────────────────────────────────────────────────────────
@@ -1623,7 +2195,7 @@ async function renderTradeTimeline(signal, cardEl) {
         </div>
         <div class="timeline-meta">
           <span>Entry ~now</span>
-          <span>Avg move/min: ${(tl.avgMovePerMin / (window.marketData.getPip?.(signal.symbol) || 0.0001)).toFixed(1)} pips</span>
+          <span>Avg move/min: ${(tl.avgMovePerMin / (window.INSTRUMENTS[signal.symbol]?.pip || 0.0001)).toFixed(1)} pips</span>
           <span>45 min</span>
         </div>
       </div>`;
@@ -1635,6 +2207,365 @@ async function renderTradeTimeline(signal, cardEl) {
       reasonsEl.parentNode.insertBefore(tlEl.firstElementChild, reasonsEl);
     }
   } catch(e) {}
+}
+
+// ── Record trade outcome (WIN / LOSS / SKIP) ──────────────────────────────
+function markResult(uid, result) {
+  // Find the signal from the current scan that matches this uid
+  const signal = signals.find(s => s.uid === uid);
+  if (signal) {
+    window.learningEngine.recordOutcome(signal, result);
+    // Also feed into the brain's manual learning pipeline
+    if (result !== 'skip') {
+      window.brain?.manualOutcome(signal, result.toUpperCase());
+      // Log brain activity
+      _brainLog(`Manual [${result.toUpperCase()}] ${signal.symbol} ${signal.direction} — brain updated weights`, result === 'win' ? 'win' : 'loss');
+    }
+  } else {
+    // Record with minimal info if signal no longer in current array
+    window.learningEngine.recordOutcome({ uid, symbol: uid.split('-')[0], direction: uid.split('-')[1] }, result);
+  }
+
+  // Update button states on the card
+  const card = document.querySelector(`[data-uid="${uid}"]`);
+  if (!card) return;
+  card.querySelectorAll('.outcome-btn').forEach(b => {
+    b.classList.remove('active-win', 'active-loss', 'active-skip');
+  });
+  const activeClass = result === 'win' ? 'active-win' : result === 'loss' ? 'active-loss' : 'active-skip';
+  card.querySelector(`.${result}-btn`)?.classList.add(activeClass);
+
+  const adjText = result !== 'skip' ? `Recorded as ${result.toUpperCase()} — learning from this outcome` : 'Trade skipped — not counted';
+  toast(adjText, result === 'win' ? 'success' : result === 'loss' ? 'error' : 'info');
+}
+
+// ── Brain activity log (ring buffer, 50 entries max) ──────────────────────────
+const _brainActivityLog = [];
+function _brainLog(msg, type = '') {
+  const ts = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  _brainActivityLog.unshift({ ts, msg, type });
+  if (_brainActivityLog.length > 50) _brainActivityLog.pop();
+  // If brain view is open, refresh it
+  const bv = document.getElementById('brain-view');
+  if (bv && bv.style.display !== 'none') renderBrainTile();
+}
+
+// ── Animated Brain Tile ───────────────────────────────────────────────────────
+function renderBrainTile() {
+  const main = document.querySelector('.main');
+  let el = document.getElementById('brain-view');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'brain-view';
+    el.style.cssText = 'flex:1;overflow-y:auto;padding:16px;';
+    main.appendChild(el);
+  }
+  el.style.display = 'block';
+
+  const stats = window.brain?.getStats() || {
+    totalLearned: 0, totalWins: 0, totalLosses: 0, overallWR: '—',
+    pendingChecks: 0, topFeatures: [], worstFeatures: [], topFingerprints: [], totalWeighted: 0,
+  };
+
+  // Synapse dots (decorative)
+  const synapseDots = Array.from({ length: 6 }, (_, i) => {
+    const x = 10 + (i % 3) * 30;
+    const y = 10 + Math.floor(i / 3) * 30;
+    const delay = (i * 0.4).toFixed(1);
+    return `<div class="synapse-dot" style="left:${x}px;top:${y}px;animation-delay:${delay}s"></div>`;
+  }).join('');
+
+  // Feature table (top features by weight)
+  const featRows = stats.topFeatures.length > 0
+    ? stats.topFeatures.map(f => {
+        const wNum    = parseFloat(f.weight);
+        const fillPct = Math.round(((wNum - 0.3) / 1.7) * 100);
+        const fillCol = wNum >= 1.4 ? '#00ff88' : wNum >= 1.0 ? '#00d4ff' : '#ef4444';
+        return `
+        <div class="brain-feat-row">
+          <div class="brain-feat-name">${f.feat.replace(/_/g, ' ')}</div>
+          <div style="font-size:11px;color:${wNum >= 1.0 ? 'var(--green)' : 'var(--red)'}">${f.wr}% WR</div>
+          <div style="font-size:11px;color:var(--muted)">${f.total} trades</div>
+          <div>
+            <div style="font-size:11px;font-weight:700;color:${fillCol};margin-bottom:3px">${f.weight}×</div>
+            <div class="brain-weight-bar"><div class="brain-weight-fill" style="width:${fillPct}%;background:${fillCol}"></div></div>
+          </div>
+        </div>`;
+      }).join('')
+    : `<div class="brain-feat-row" style="color:var(--muted);font-size:11px;grid-column:1/-1">No feature data yet — brain will learn after first auto-check completes (~18 min after signals appear)</div>`;
+
+  // Fingerprint table
+  const fpRows = stats.topFingerprints.length > 0
+    ? stats.topFingerprints.map(f => `
+        <div class="brain-feat-row">
+          <div class="brain-feat-name">${f.fp}</div>
+          <div style="font-size:11px;color:var(--green)">${f.wr}% WR</div>
+          <div style="font-size:11px;color:var(--muted)">${f.total} trades</div>
+          <div></div>
+        </div>`).join('')
+    : `<div class="brain-feat-row" style="color:var(--muted);font-size:11px;grid-column:1/-1">No fingerprint data yet</div>`;
+
+  // Activity log
+  const logHtml = _brainActivityLog.length > 0
+    ? _brainActivityLog.slice(0, 20).map(e => `
+        <div class="${e.type === 'win' ? 'brain-log-win' : e.type === 'loss' ? 'brain-log-loss' : 'brain-log-entry'}">
+          [${e.ts}] ${e.msg}
+        </div>`).join('')
+    : '<div style="color:var(--muted)">Brain is watching… activity will appear here after first scan completes.</div>';
+
+  const wrColor = parseFloat(stats.overallWR) >= 50 ? 'var(--green)' : stats.overallWR === '—' ? '#a855f7' : 'var(--red)';
+
+  el.innerHTML = `
+  <div class="brain-wrap">
+    <div class="brain-hero">
+      <div class="brain-synapse-wrap">${synapseDots}</div>
+      <div class="brain-hero-title">
+        <div class="brain-pulse"></div>
+        🧠 Brain — Adaptive Learning Engine
+      </div>
+      <div class="brain-hero-sub">
+        The brain autonomously tracks every indicator that fires on each signal, then
+        re-fetches 1m data 18 minutes later to self-score whether the trade would have worked.
+        Over time it up-weights winning indicator combinations and down-weights losers —
+        making every new scan smarter than the last.
+      </div>
+    </div>
+
+    <div class="brain-stat-row">
+      <div class="brain-stat">
+        <div class="bs-val">${stats.totalLearned}</div>
+        <div class="bs-lbl">Total Learned</div>
+      </div>
+      <div class="brain-stat">
+        <div class="bs-val" style="color:${wrColor}">${stats.overallWR}%</div>
+        <div class="bs-lbl">Auto WR</div>
+      </div>
+      <div class="brain-stat">
+        <div class="bs-val">${stats.totalWeighted}</div>
+        <div class="bs-lbl">Features Weighted</div>
+      </div>
+      <div class="brain-stat">
+        <div class="bs-val" style="color:var(--amber)">${stats.pendingChecks}</div>
+        <div class="bs-lbl">Pending Checks</div>
+      </div>
+    </div>
+
+    <div class="brain-sect-title">Top Features by Weight</div>
+    <div class="brain-feat-table">
+      <div class="brain-feat-row header">
+        <div>Feature</div><div>Win Rate</div><div>Samples</div><div>Weight</div>
+      </div>
+      ${featRows}
+    </div>
+
+    <div class="brain-sect-title">Candle Fingerprints (3-bar Patterns)</div>
+    <div class="brain-feat-table">
+      <div class="brain-feat-row header">
+        <div>Pattern</div><div>Win Rate</div><div>Samples</div><div></div>
+      </div>
+      ${fpRows}
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;">
+      <div class="brain-sect-title" style="margin:0">Activity Log</div>
+      <button class="brain-reset-btn" onclick="if(confirm('Reset all brain learning? This cannot be undone.')){window.brain.reset();_brainActivityLog.length=0;_brainLog('Brain reset — starting fresh');renderBrainTile();}">Reset Brain</button>
+    </div>
+    <div class="brain-activity-log">${logHtml}</div>
+
+    <div style="font-size:10px;color:var(--muted);margin-top:12px;line-height:1.6">
+      <strong style="color:var(--text)">How it works:</strong>
+      Weight 1.0× = neutral (default). Above 1.0× = brain has learned this indicator wins more often.
+      Below 1.0× = brain has learned this indicator is unreliable. Weights update after every outcome check.
+      Fingerprints encode the last 3 candles (R=rising/F=falling + s/m/l body size) — the brain learns which
+      candle sequences precede successful 15-minute trades.
+    </div>
+  </div>`;
+}
+
+// ── Contextual money management tip for signal cards ─────────────────────
+// Picks a relevant teaching point based on the signal's characteristics.
+function getMoneyTip(s, rrNum, breakEvenWR) {
+  const isBuy     = s.direction === 'BUY';
+  const hasPattern = s.patterns && s.patterns.length > 0;
+  const highConf  = s.confidence >= 80;
+  const riskPct   = challenge?.safeRiskPerTrade && challenge?.balance
+    ? ((challenge.safeRiskPerTrade / challenge.balance) * 100).toFixed(1)
+    : '1';
+
+  // Build pool of relevant tips and pick the best-fit one
+  const tips = [];
+
+  // Always include the break-even win rate insight
+  tips.push(`At ${rrNum}:1 R:R you only need to win <strong>${breakEvenWR}% of trades</strong> to be profitable — edge comes from R:R, not win rate.`);
+
+  // R:R quality commentary
+  if (rrNum >= 2.5) {
+    tips.push(`<strong>Strong R:R of ${rrNum}:1</strong> — even a 30% win rate here produces net profit. Quality setups like this are worth waiting for.`);
+  } else {
+    tips.push(`An R:R of ${rrNum}:1 means your winner must cover losses plus generate profit. Avoid trades below 2:1 R:R consistently.`);
+  }
+
+  // Pattern-specific insight
+  if (hasPattern) {
+    tips.push(`Reversal patterns (${s.patterns.join(', ')}) signal a <strong>shift in control</strong> between buyers and sellers — enter after the pattern closes, not during.`);
+  }
+
+  // Position sizing insight
+  tips.push(`<strong>Position size is mathematical, not emotional.</strong> At ${riskPct}% risk per trade, you can absorb many losses while keeping capital protected.`);
+
+  // Break-even SL move rule
+  tips.push(`Rule: once price moves +1R in your favor (~${fmt(isBuy ? s.entry + (s.entry - s.sl) : s.entry - (s.sl - s.entry))}), <strong>move your stop loss to entry</strong> for a risk-free trade.`);
+
+  // Partial close suggestion
+  tips.push(`Consider <strong>closing 50% at TP1</strong> (${fmt(s.tp1)}) and moving SL to entry. This locks in profit and lets the rest run free to TP2.`);
+
+  // High confidence caution
+  if (highConf) {
+    tips.push(`High confidence (${s.confidence}%) is encouraging, but never increase your risk size. <strong>1 trade = 1 risk unit.</strong> Discipline beats prediction.`);
+  }
+
+  // Drawdown math
+  tips.push(`Protect capital above all: a <strong>10% drawdown needs 11% gain</strong> to recover, but a 50% drawdown needs 100%. Stay small, stay alive.`);
+
+  // Pick tip based on stable hash of symbol+direction for variety
+  const hash = s.symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0) + (isBuy ? 1 : 7);
+  return `💡 ${tips[hash % tips.length]}`;
+}
+
+// ── ForexFactory events on signal cards ──────────────────────────────────
+async function renderFFEvents(signal, cardEl) {
+  try {
+    const events = await window.newsSentiment.getUpcomingEvents(signal.symbol, 24);
+    const container = cardEl.querySelector(`#ff-${(signal.id || signal.symbol + signal.direction).replace(/[^a-z0-9-]/gi, '_')}`);
+    if (!container) return;
+    if (!events || events.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const rows = events.slice(0, 4).map(e => {
+      const dt = new Date(e.ts);
+      const timeStr = e.ts > Date.now()
+        ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : 'Now';
+      const forecastStr = e.forecast ? ` F:${e.forecast}` : '';
+      return `
+      <div class="ff-event-row">
+        <span class="ff-impact ${e.impact}"></span>
+        <span class="ff-time">${timeStr}</span>
+        <span class="ff-country">${e.country}</span>
+        <span class="ff-title">${e.title}</span>
+        <span class="ff-forecast">${forecastStr}</span>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `
+    <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">
+      Upcoming Events (24h)
+    </div>
+    ${rows}`;
+  } catch(e) {}
+}
+
+// ── Journal view ──────────────────────────────────────────────────────────
+function renderJournal() {
+  const main = document.querySelector('.main');
+  let el = document.getElementById('journal-view');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'journal-view';
+    el.style.cssText = 'flex:1;overflow-y:auto;padding:16px;';
+    main.appendChild(el);
+  }
+  el.style.display = 'block';
+
+  const stats = window.learningEngine.getStats();
+  const winColor  = parseFloat(stats.winRate) >= 50 ? 'var(--green)' : 'var(--red)';
+  const streakCol = stats.streakType === 'win' ? 'var(--green)' : stats.streakType === 'loss' ? 'var(--red)' : 'var(--muted)';
+
+  // Per-symbol table
+  const symRows = Object.entries(stats.bySymbol)
+    .sort((a, b) => (b[1].wins + b[1].losses) - (a[1].wins + a[1].losses))
+    .map(([sym, d]) => {
+      const total = d.wins + d.losses;
+      const wr    = total > 0 ? ((d.wins / total) * 100).toFixed(0) : '—';
+      const adjBuy  = stats.adjustments[`${sym}-BUY`];
+      const adjSell = stats.adjustments[`${sym}-SELL`];
+      const adjStr  = [
+        adjBuy  !== undefined ? `B:${adjBuy  > 0 ? '+' : ''}${adjBuy}`  : null,
+        adjSell !== undefined ? `S:${adjSell > 0 ? '+' : ''}${adjSell}` : null,
+      ].filter(Boolean).join(' ') || '—';
+      return `
+      <div class="journal-sym-row">
+        <div class="sym-name">${sym}</div>
+        <div class="sym-stats">${d.wins}W / ${d.losses}L — ${wr}% WR</div>
+        <div class="sym-stats" style="color:var(--primary);font-size:10px;">Adj: ${adjStr}</div>
+      </div>`;
+    }).join('') || '<div style="color:var(--muted);font-size:12px;">No trades recorded yet.</div>';
+
+  // Recent trades
+  const recentRows = stats.recent.slice(0, 15).map(t => {
+    const dt = new Date(t.ts).toLocaleDateString([], { month:'short', day:'numeric' });
+    const tm = new Date(t.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    return `
+    <div class="journal-trade-row">
+      <span class="jt-result ${t.result}">${t.result.toUpperCase()}</span>
+      <span style="font-weight:700;color:var(--text)">${t.symbol}</span>
+      <span style="color:var(--muted)">${t.direction}</span>
+      <span style="color:var(--muted2)">${dt} ${tm}</span>
+      <span style="color:var(--muted);flex:1;text-align:right">${t.confidence}% conf</span>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:12px;">No trades recorded yet.</div>';
+
+  el.innerHTML = `
+  <div class="journal-wrap">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:16px;font-weight:800;color:var(--text);">Trade Journal</div>
+      <button class="journal-clear-btn" onclick="if(confirm('Clear all journal history?')){window.learningEngine.clear();renderJournal();}">Clear History</button>
+    </div>
+
+    <div class="journal-stat-grid">
+      <div class="journal-stat">
+        <div class="jstat-val">${stats.totalTrades}</div>
+        <div class="jstat-lbl">Total Trades</div>
+      </div>
+      <div class="journal-stat">
+        <div class="jstat-val" style="color:${winColor}">${stats.winRate}%</div>
+        <div class="jstat-lbl">Win Rate</div>
+      </div>
+      <div class="journal-stat">
+        <div class="jstat-val" style="color:var(--green)">${stats.wins}</div>
+        <div class="jstat-lbl">Wins</div>
+      </div>
+      <div class="journal-stat">
+        <div class="jstat-val" style="color:var(--red)">${stats.losses}</div>
+        <div class="jstat-lbl">Losses</div>
+      </div>
+    </div>
+
+    ${stats.streak >= 2 ? `
+    <div style="background:rgba(${stats.streakType==='win'?'0,255,136':'239,68,68'},.08);border:1px solid rgba(${stats.streakType==='win'?'0,255,136':'239,68,68'},.2);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:${streakCol};">
+      ${stats.streak}-trade ${stats.streakType} streak — ${stats.streakType==='win'?'stay disciplined':'review your setups'}
+    </div>` : ''}
+
+    <div class="journal-sect-title">By Instrument</div>
+    <div class="journal-sym-grid">${symRows}</div>
+
+    <div class="journal-sect-title">Learning Adjustments</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Confidence is automatically adjusted ±${window.learningEngine.MAX_ADJ} pts based on your recorded outcomes (requires ${window.learningEngine.MIN_SAMPLE}+ trades per symbol-direction).</div>
+    ${Object.keys(stats.adjustments).length === 0
+      ? '<div style="color:var(--muted);font-size:12px;">No adjustments yet — record more trade outcomes.</div>'
+      : Object.entries(stats.adjustments).map(([k,v]) =>
+          `<div class="journal-adj-row">
+            <span style="color:var(--text)">${k}</span>
+            <span style="color:${v>0?'var(--green)':v<0?'var(--red)':'var(--muted)'}; font-weight:700">${v > 0 ? '+' : ''}${v} pts</span>
+          </div>`
+        ).join('')
+    }
+
+    <div class="journal-sect-title" style="margin-top:20px;">Recent Trades (${stats.skips} skipped)</div>
+    ${recentRows}
+  </div>`;
 }
 
 let toastTimer = null;

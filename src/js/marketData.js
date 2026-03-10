@@ -2,14 +2,14 @@
 // All crypto data is real-time via WebSocket. Futures/forex use the freshest available REST data.
 
 const INSTRUMENTS = {
-  // Forex
-  'EURUSD': { type: 'forex', av: 'EUR', quote: 'USD', display: 'EUR/USD', pip: 0.0001 },
-  'GBPUSD': { type: 'forex', av: 'GBP', quote: 'USD', display: 'GBP/USD', pip: 0.0001 },
-  'USDJPY': { type: 'forex', av: 'USD', quote: 'JPY', display: 'USD/JPY', pip: 0.01   },
-  'GBPJPY': { type: 'forex', av: 'GBP', quote: 'JPY', display: 'GBP/JPY', pip: 0.01   },
-  'XAUUSD': { type: 'forex', av: 'XAU', quote: 'USD', display: 'XAU/USD', pip: 0.01   },
-  'AUDUSD': { type: 'forex', av: 'AUD', quote: 'USD', display: 'AUD/USD', pip: 0.0001 },
-  'USDCAD': { type: 'forex', av: 'USD', quote: 'CAD', display: 'USD/CAD', pip: 0.0001 },
+  // Forex — yf: Yahoo Finance ticker (free, no key), av: Alpha Vantage symbols (optional key)
+  'EURUSD': { type: 'forex', yf: 'EURUSD=X', av: 'EUR', quote: 'USD', display: 'EUR/USD', pip: 0.0001 },
+  'GBPUSD': { type: 'forex', yf: 'GBPUSD=X', av: 'GBP', quote: 'USD', display: 'GBP/USD', pip: 0.0001 },
+  'USDJPY': { type: 'forex', yf: 'USDJPY=X', av: 'USD', quote: 'JPY', display: 'USD/JPY', pip: 0.01   },
+  'GBPJPY': { type: 'forex', yf: 'GBPJPY=X', av: 'GBP', quote: 'JPY', display: 'GBP/JPY', pip: 0.01   },
+  'XAUUSD': { type: 'forex', yf: 'GC=F',     av: 'XAU', quote: 'USD', display: 'XAU/USD', pip: 0.01   },
+  'AUDUSD': { type: 'forex', yf: 'AUDUSD=X', av: 'AUD', quote: 'USD', display: 'AUD/USD', pip: 0.0001 },
+  'USDCAD': { type: 'forex', yf: 'USDCAD=X', av: 'USD', quote: 'CAD', display: 'USD/CAD', pip: 0.0001 },
   // Futures
   'ES':  { type: 'futures', yf: 'ES=F',  display: 'S&P 500 (ES)',       pip: 0.25,  tickVal: 12.50 },
   'NQ':  { type: 'futures', yf: 'NQ=F',  display: 'Nasdaq (NQ)',        pip: 0.25,  tickVal: 5.00  },
@@ -54,7 +54,15 @@ class MarketData {
     this.CACHE_TTL_1M = 15 * 1000;   // 15s for 1m candles — nearly live
   }
 
-  setAlphaVantageKey(key) { this.avApiKey = key.trim(); }
+  setAlphaVantageKey(key) {
+    const trimmed = key.trim();
+    if (trimmed !== this.avApiKey) {
+      this.avApiKey = trimmed;
+      // Clear all caches so next fetch uses the new key with live data
+      this.cache   = {};
+      this.cache1m = {};
+    }
+  }
 
   // ── Subscribe to live price ticks ────────────────────────────────────────
   onPriceUpdate(symbol, cb) {
@@ -80,8 +88,8 @@ class MarketData {
     if (!inst) return;
     if (inst.type === 'crypto') {
       this._startBinanceWs(symbol);
-    } else {
-      // For futures/forex: poll every 30s for freshest available data
+    } else if (inst.type === 'futures' || (inst.type === 'forex' && inst.yf)) {
+      // Poll Yahoo Finance for both futures and forex every 30s
       if (!this._pollTimers) this._pollTimers = {};
       if (!this._pollTimers[symbol]) {
         this._pollFuturesPrice(symbol);
@@ -94,16 +102,24 @@ class MarketData {
     const inst = INSTRUMENTS[symbol];
     if (!inst) return;
     try {
-      if (inst.type === 'futures') {
-        const data = await this._fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(inst.yf)}?interval=1m&range=1d`);
-        const res  = data?.chart?.result?.[0];
+      if (inst.type === 'futures' || (inst.type === 'forex' && inst.yf)) {
+        // Yahoo Finance works for both futures and forex (EURUSD=X etc.)
+        let data;
+        for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
+          try {
+            data = await this._fetch(`https://${host}/v8/finance/chart/${encodeURIComponent(inst.yf)}?interval=1m&range=1d`);
+            if (data?.chart?.result?.[0]) break;
+          } catch(e) {}
+        }
+        const res = data?.chart?.result?.[0];
         if (res) {
           const quotes = res.indicators.quote[0];
           const closes = quotes.close.filter(Boolean);
           if (closes.length > 0) this._emit(symbol, closes[closes.length - 1]);
         }
-      } else if (inst.type === 'forex' && this.avApiKey) {
-        // Alpha Vantage intraday for forex — rate limited but best free option
+      }
+      // Optional AV enhancement for forex real-time rate
+      if (inst.type === 'forex' && this.avApiKey) {
         const data = await this._fetch(`https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${inst.av}&to_currency=${inst.quote}&apikey=${this.avApiKey}`);
         const rate = data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate'];
         if (rate) this._emit(symbol, parseFloat(rate));
@@ -206,19 +222,27 @@ class MarketData {
       } else if (inst.type === 'futures') {
         candles = await this._fetchYahooRaw(inst.yf, '1m', limit);
       } else {
-        // Forex 1m — use Alpha Vantage 1min endpoint
-        if (this.avApiKey) {
+        // Forex 1m — Yahoo Finance first (free), then Alpha Vantage (optional key)
+        if (inst.yf) {
+          try {
+            candles = await this._fetchYahooRaw(inst.yf, '1m', limit);
+          } catch(e) {
+            if (this.avApiKey) {
+              candles = await this._fetchAlphaVantage1m(inst.av, inst.quote, limit);
+            } else throw e;
+          }
+        } else if (this.avApiKey) {
           candles = await this._fetchAlphaVantage1m(inst.av, inst.quote, limit);
         } else {
-          throw new Error('No Alpha Vantage key for forex 1m');
+          throw new Error('No data source for forex 1m');
         }
       }
     } catch(e) {
-      console.warn(`1m fetch failed for ${symbol}:`, e.message, '— simulating');
-      candles = this._generateRealisticCandles(symbol, limit, '1m');
+      console.error(`Live 1m fetch failed for ${symbol}:`, e.message);
+      candles = [];
     }
 
-    candles = candles.filter(c => c.close > 0 && c.open > 0);
+    candles = (candles || []).filter(c => c.close > 0 && c.open > 0 && c.high > 0 && c.low > 0);
     this.cache[cacheKey] = { candles, ts: now };
     if (candles.length > 0) this.prices[symbol] = candles[candles.length - 1].close;
     return candles.slice(-limit);
@@ -234,14 +258,22 @@ class MarketData {
       } else if (inst.type === 'futures') {
         return await this._fetchYahooHistorical(inst.yf, interval, limit);
       } else {
-        if (this.avApiKey) {
+        // Forex: Yahoo Finance first, then AV
+        if (inst.yf) {
+          try {
+            return await this._fetchYahooHistorical(inst.yf, interval, limit);
+          } catch(e) {
+            if (this.avApiKey) return await this._fetchAlphaVantageDaily(inst.av, inst.quote, limit);
+            throw e;
+          }
+        } else if (this.avApiKey) {
           return await this._fetchAlphaVantageDaily(inst.av, inst.quote, limit);
         }
-        throw new Error('No key');
+        throw new Error('No data source for historical forex');
       }
     } catch(e) {
-      console.warn(`Historical fetch failed ${symbol}:`, e.message);
-      return this._generateRealisticCandles(symbol, limit, interval);
+      console.error(`Historical fetch failed ${symbol}:`, e.message);
+      return [];
     }
   }
 
@@ -256,20 +288,27 @@ class MarketData {
       } else if (inst.type === 'futures') {
         candles = await this._fetchYahoo(inst.yf, interval, limit);
       } else {
-        if (this.avApiKey) {
+        // Forex: try Yahoo Finance first (free, no key), fall back to Alpha Vantage
+        if (inst.yf) {
+          try {
+            candles = await this._fetchYahoo(inst.yf, interval, limit);
+          } catch(e) {
+            if (this.avApiKey) {
+              candles = await this._fetchAlphaVantage(inst.av, inst.quote, limit);
+            } else throw e;
+          }
+        } else if (this.avApiKey) {
           candles = await this._fetchAlphaVantage(inst.av, inst.quote, limit);
         } else {
-          throw new Error('No Alpha Vantage key');
+          throw new Error('No data source for forex');
         }
       }
     } catch(e) {
-      console.warn(`Fetch failed ${symbol} ${interval}:`, e.message, '— simulating');
-      candles = this._generateRealisticCandles(symbol, limit, interval);
+      console.error(`Live data fetch failed ${symbol} ${interval}:`, e.message);
+      candles = [];
     }
 
-    candles = candles.filter(c => c.close > 0 && c.open > 0 &&
-      c.high >= c.open && c.high >= c.close &&
-      c.low  <= c.open && c.low  <= c.close);
+    candles = (candles || []).filter(c => c.close > 0 && c.open > 0 && c.high > 0 && c.low > 0);
 
     this.cache[cacheKey] = { candles, ts: now };
     if (candles.length > 0) this.prices[symbol] = candles[candles.length - 1].close;
@@ -353,14 +392,15 @@ class MarketData {
     return this._fetchYahooRaw(ticker, interval, limit);
   }
 
-  async _fetchYahooRaw(ticker, interval, limit) {
+  async _fetchYahooRaw(ticker, interval, limit, rangeOverride = null) {
     const ivMap = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '1d': '1d' };
     const iv = ivMap[interval] || '1h';
-    const range = interval === '1d' ? '2y' :
-                  interval === '1h' ? '30d' :
+    const range = rangeOverride || (
+                  interval === '1d' ? '2y' :
+                  interval === '1h' ? '60d' :
                   interval === '1m' ? '1d' :
                   interval === '5m' ? '5d' :
-                  '5d';
+                  '5d');
 
     let data;
     for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
@@ -377,7 +417,10 @@ class MarketData {
     const ts     = res.timestamp;
     const quotes = res.indicators.quote[0];
 
-    return ts.slice(-limit).map((t, i) => {
+    // Compute offset so OHLC indices align with sliced timestamps
+    const offset = Math.max(0, ts.length - limit);
+    return ts.slice(offset).map((t, idx) => {
+      const i = offset + idx;
       const o = quotes.open[i], h = quotes.high[i], l = quotes.low[i], c = quotes.close[i];
       if (!o || !c) return null;
       return {
@@ -392,14 +435,52 @@ class MarketData {
   }
 
   async _fetchYahooHistorical(ticker, interval, limit) {
-    // Use 2y range for daily historical data
-    return this._fetchYahooRaw(ticker, interval === '1h' ? '1h' : '1d', limit);
+    // For daily data use 2y range; for hourly use 6mo to get enough bars for backtesting.
+    // Regular candle fetches use shorter ranges (faster), but historical fetches need depth.
+    const iv    = interval === '1h' ? '1h' : '1d';
+    const range = interval === '1h' ? '6mo' : '2y';
+    return this._fetchYahooRaw(ticker, iv, limit, range);
   }
 
   _aggregate1Hto4H(candles1H, limit) {
     const result = [];
     for (let i = 0; i + 3 < candles1H.length; i += 4) {
       const g = candles1H.slice(i, i + 4);
+      result.push({
+        time:   g[0].time,
+        open:   g[0].open,
+        high:   Math.max(...g.map(c => c.high)),
+        low:    Math.min(...g.map(c => c.low)),
+        close:  g[g.length - 1].close,
+        volume: g.reduce((a, c) => a + c.volume, 0),
+      });
+    }
+    return result.slice(-limit);
+  }
+
+  // Group 1m bars into 5m bars (every 5 × 1m = 5 min)
+  // Used by _scanOne to provide 5m context when primary data is 1m
+  _aggregate1mto5m(candles1m, limit = 60) {
+    const result = [];
+    for (let i = 0; i + 4 < candles1m.length; i += 5) {
+      const g = candles1m.slice(i, i + 5);
+      result.push({
+        time:   g[0].time,
+        open:   g[0].open,
+        high:   Math.max(...g.map(c => c.high)),
+        low:    Math.min(...g.map(c => c.low)),
+        close:  g[g.length - 1].close,
+        volume: g.reduce((a, c) => a + c.volume, 0),
+      });
+    }
+    return result.slice(-limit);
+  }
+
+  // Group 5m bars into 1H bars (every 12 × 5m = 60 min)
+  _aggregate5mto1H(candles5m, limit = 30) {
+    const result = [];
+    for (let i = 0; i + 11 < candles5m.length; i += 12) {
+      const g = candles5m.slice(i, i + 12);
       result.push({
         time:   g[0].time,
         open:   g[0].open,

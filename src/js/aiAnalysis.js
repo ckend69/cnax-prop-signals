@@ -94,7 +94,7 @@ Write a concise trader's briefing for this setup.`;
 
     if (challenge) {
       const risk = challenge.drawdownProgress;
-      if (risk > 70) analysis += '⚠️ Account drawdown is elevated — consider using reduced position sizing.';
+      if (risk > 70) analysis += 'Account drawdown is elevated — consider using reduced position sizing.';
       else if (risk > 40) analysis += 'Moderate drawdown risk — stick to the calculated position size.';
       else analysis += 'Account health is good — this is a suitable setup given current challenge standing.';
     }

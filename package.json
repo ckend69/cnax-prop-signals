@@ -20,10 +20,15 @@
     "files": ["electron/**/*", "src/**/*"],
     "mac": {
       "category": "public.app-category.finance",
-      "target": "dmg"
+      "target": [
+        { "target": "zip", "arch": ["arm64"] },
+        { "target": "dir", "arch": ["arm64"] }
+      ]
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        { "target": "portable", "arch": ["x64"] }
+      ]
     }
   }
 }

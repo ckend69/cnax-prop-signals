@@ -262,34 +262,35 @@ class PredictionEngine {
   // Determines the overall directional bias for the current trading day.
   async getDailyBias(symbol) {
     try {
-      // Get 1h candles for today + yesterday
-      const candles1h = await window.marketData.getCandles(symbol, '1h', 48);
-      if (!candles1h || candles1h.length < 8) return null;
+      // Get 1h candles for today + yesterday (request more to survive filtering)
+      const candles1h = await window.marketData.getCandles(symbol, '1h', 96);
+      if (!candles1h || candles1h.length < 4) return null;
 
       // Get 1m candles for current session dynamics
       const candles1m = await window.marketData.getCandles1m(symbol, 120);
       const closes1h  = candles1h.map(c => c.close);
 
-      // Previous day close (24h ago)
-      const prevDayClose = candles1h[candles1h.length - 24]?.close || candles1h[0].close;
-      const todayOpen    = candles1h[candles1h.length - 8]?.open  || candles1h[0].open;
+      const n            = candles1h.length;
+      // Previous day close (~24 bars ago, floor to available data)
+      const prevDayClose = candles1h[Math.max(0, n - 24)]?.close || candles1h[0].close;
+      const todayOpen    = candles1h[Math.max(0, n - 8)]?.open   || candles1h[0].open;
       const current      = closes1h[closes1h.length - 1];
 
       // Gap analysis
-      const gapPct = ((todayOpen - prevDayClose) / prevDayClose * 100);
+      const gapPct = prevDayClose > 0 ? ((todayOpen - prevDayClose) / prevDayClose * 100) : 0;
 
-      // Session high/low (last 8h)
-      const sessionCandles = candles1h.slice(-8);
+      // Session high/low (last 8h or all available)
+      const sessionCandles = candles1h.slice(-Math.min(8, n));
       const sessionHigh    = Math.max(...sessionCandles.map(c => c.high));
       const sessionLow     = Math.min(...sessionCandles.map(c => c.low));
       const sessionRange   = sessionHigh - sessionLow;
       const pricePosition  = sessionRange > 0 ? (current - sessionLow) / sessionRange : 0.5;
 
-      // VWAP approximation (price * volume weighted)
+      // VWAP approximation — use volume-weighted if available, else equal-weighted (forex has no volume)
       const totalVol = sessionCandles.reduce((a, c) => a + c.volume, 0);
       const vwap     = totalVol > 0
         ? sessionCandles.reduce((a, c) => a + ((c.high + c.low + c.close) / 3) * c.volume, 0) / totalVol
-        : current;
+        : sessionCandles.reduce((a, c) => a + (c.high + c.low + c.close) / 3, 0) / sessionCandles.length;
 
       // Trend of last 4h (recent session bias)
       const ema4h_9  = window.TechnicalAnalysis?.ema(closes1h, 9) || [];
@@ -324,9 +325,10 @@ class PredictionEngine {
       if (rsi > 55) { bullBias += 10; reasons.push(`RSI bullish zone (${rsi.toFixed(1)})`); }
       if (rsi < 45) { bearBias += 10; reasons.push(`RSI bearish zone (${rsi.toFixed(1)})`); }
 
-      // 1m momentum (last 30 minutes)
-      if (candles1m && candles1m.length >= 30) {
-        const c30 = candles1m[candles1m.length - 30].close;
+      // 1m momentum (last 30 minutes, or all available)
+      if (candles1m && candles1m.length >= 5) {
+        const lookback = Math.min(30, candles1m.length - 1);
+        const c30 = candles1m[candles1m.length - lookback].close;
         const movePct = (current - c30) / c30 * 100;
         if (movePct > 0.05)  { bullBias += 10; reasons.push(`Up ${movePct.toFixed(2)}% in last 30min`); }
         if (movePct < -0.05) { bearBias += 10; reasons.push(`Down ${Math.abs(movePct).toFixed(2)}% in last 30min`); }

@@ -198,11 +198,25 @@ class Brain {
       if (signal.direction === 'BUY') {
         if      (minLow  <= signal.sl)  result = 'LOSS';
         else if (maxHigh >= signal.tp1) result = 'WIN';
-        else result = null;   // TP/SL not yet hit — skip (too early)
+        else result = null;   // clean TP/SL not hit — try time-exit below
       } else {
         if      (maxHigh >= signal.sl)  result = 'LOSS';
         else if (minLow  <= signal.tp1) result = 'WIN';
         else result = null;
+      }
+
+      // Fix #4: Partial/time-exit learning — if no clean hit but enough bars elapsed,
+      // record based on open P&L vs SL distance (0.5R threshold).
+      if (result === null && after.length >= 15) {
+        const exitPrice = after[after.length - 1].close;
+        const slDist    = Math.abs(signal.entry - signal.sl);
+        if (slDist > 0) {
+          const pnl   = signal.direction === 'BUY' ? exitPrice - signal.entry : signal.entry - exitPrice;
+          const rMult = pnl / slDist;
+          if      (rMult >=  0.5) result = 'WIN';
+          else if (rMult <= -0.5) result = 'LOSS';
+          // else |rMult| < 0.5 — too neutral to learn from, stay null
+        }
       }
 
       if (result) {
@@ -216,16 +230,16 @@ class Brain {
         // Desktop notification with trailing stop guidance on WIN
         if (result === 'WIN' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           const tp2Str = signal.tp2 ? ` → trail to TP2 ${signal.tp2.toFixed ? signal.tp2.toFixed(4) : signal.tp2}` : '';
-          new Notification(`✅ TP1 Hit — ${signal.symbol} ${signal.direction}`, {
+          new Notification(`TP1 Hit — ${signal.symbol} ${signal.direction}`, {
             body: `Move SL to breakeven (${signal.entry?.toFixed ? signal.entry.toFixed(4) : signal.entry})${tp2Str}`,
             silent: false,
           });
           if (typeof window._brainLog === 'function') {
-            window._brainLog(`💹 ${signal.symbol}: TP1 hit — move SL to breakeven, trail toward TP2`, 'win');
+            window._brainLog(`${signal.symbol}: TP1 hit — move SL to breakeven, trail toward TP2`, 'win');
           }
         }
         if (result === 'LOSS' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(`❌ SL Hit — ${signal.symbol} ${signal.direction}`, {
+          new Notification(`SL Hit — ${signal.symbol} ${signal.direction}`, {
             body: `Stop loss triggered. Brain weight updated.`,
             silent: true,
           });
@@ -318,6 +332,17 @@ class Brain {
   _recalcWeights() {
     const now         = Date.now();
     const halfLifeMs  = 14 * 24 * 60 * 60 * 1000;  // 14-day half-life
+    const purgeAgeMs  = 60 * 24 * 60 * 60 * 1000;  // Fix #5: purge features idle >60 days
+
+    // Purge stale features before recalculating
+    for (const feat of Object.keys(this.state.featureStats)) {
+      const stat = this.state.featureStats[feat];
+      if (stat.lastTs && (now - stat.lastTs) > purgeAgeMs) {
+        delete this.state.featureStats[feat];
+        delete this.state.weights[feat];
+        console.log(`Brain: purged stale feature "${feat}" (idle >60 days)`);
+      }
+    }
 
     // Global weights (all symbols combined)
     for (const [feat, stat] of Object.entries(this.state.featureStats)) {
@@ -391,6 +416,68 @@ class Brain {
     if (kept.length > 0) console.log(`Brain: resumed ${kept.length} pending outcome check(s)`);
   }
 
+  // ── Actionable recommendations based on learned data (#9) ─────────────────
+  getRecommendations() {
+    const recs = [];
+    const total = this.state.totalLearned || 0;
+
+    if (total < 10) {
+      recs.push({ type: 'info', text: `Brain has ${total} sample${total !== 1 ? 's' : ''} so far. Accuracy improves with more trades — keep scanning.` });
+      return recs;
+    }
+
+    // Feature win rate analysis
+    const featList = Object.entries(this.state.featureStats)
+      .map(([feat, s]) => {
+        const t  = s.wins + s.losses;
+        const wr = t > 0 ? s.wins / t : null;
+        return { feat, total: t, wr, weight: this.getWeight(feat) };
+      })
+      .filter(f => f.total >= 5 && f.wr !== null)
+      .sort((a, b) => b.wr - a.wr);
+
+    if (featList.length > 0) {
+      const best = featList[0];
+      if (best.wr >= 0.60) {
+        recs.push({ type: 'positive', text: `Top signal: "${best.feat.replace(/_/g, ' ')}" — ${(best.wr * 100).toFixed(0)}% win rate across ${best.total} samples. Weight boosted to ${best.weight.toFixed(2)}x.` });
+      }
+      const worst = featList[featList.length - 1];
+      if (worst.wr <= 0.40 && worst.total >= 5) {
+        recs.push({ type: 'warning', text: `Weak signal: "${worst.feat.replace(/_/g, ' ')}" — only ${(worst.wr * 100).toFixed(0)}% win rate. Brain auto-reduces its influence (${worst.weight.toFixed(2)}x weight).` });
+      }
+    }
+
+    // Overall win rate advice
+    const wr = total > 0 ? this.state.totalWins / total : 0;
+    if (wr >= 0.60) {
+      recs.push({ type: 'positive', text: `Overall auto win rate: ${(wr * 100).toFixed(0)}% — brain is performing above expectation. Signal quality is high.` });
+    } else if (wr < 0.45 && total >= 20) {
+      recs.push({ type: 'warning', text: `Auto win rate: ${(wr * 100).toFixed(0)}%. Consider raising the minimum confidence threshold in Settings to filter weaker setups.` });
+    }
+
+    // Best symbol
+    const symStats = Object.entries(this.state.symbolFeatureStats || {})
+      .map(([sym, featMap]) => {
+        const all   = Object.values(featMap);
+        const wins  = all.reduce((a, s) => a + s.wins, 0);
+        const loses = all.reduce((a, s) => a + s.losses, 0);
+        const t     = wins + loses;
+        return { sym, wr: t >= 5 ? wins / t : null, total: t };
+      })
+      .filter(s => s.wr !== null)
+      .sort((a, b) => b.wr - a.wr);
+
+    if (symStats.length > 0 && symStats[0].wr >= 0.65) {
+      recs.push({ type: 'positive', text: `Best instrument: ${symStats[0].sym} — ${(symStats[0].wr * 100).toFixed(0)}% win rate over ${symStats[0].total} samples. Brain favours this pair.` });
+    }
+    if (symStats.length > 1 && symStats[symStats.length - 1].wr <= 0.40) {
+      const w = symStats[symStats.length - 1];
+      recs.push({ type: 'warning', text: `Weakest instrument: ${w.sym} — ${(w.wr * 100).toFixed(0)}% win rate. Consider excluding it in Settings.` });
+    }
+
+    return recs;
+  }
+
   // ── Stats for the Journal / Brain panel ───────────────────────────────────
   getStats() {
     const total   = this.state.totalLearned;
@@ -422,15 +509,16 @@ class Brain {
       .sort((a, b) => parseFloat(b.wr) - parseFloat(a.wr));
 
     return {
-      totalLearned:   total,
-      totalWins:      this.state.totalWins,
-      totalLosses:    this.state.totalLosses,
-      overallWR:      wr,
-      pendingChecks:  this.state.pendingChecks.length,
-      topFeatures:    featList.slice(0, 8),
-      worstFeatures:  featList.slice(-5).reverse(),
+      totalLearned:    total,
+      totalWins:       this.state.totalWins,
+      totalLosses:     this.state.totalLosses,
+      overallWR:       wr,
+      pendingChecks:   this.state.pendingChecks.length,
+      topFeatures:     featList.slice(0, 8),
+      worstFeatures:   featList.slice(-5).reverse(),
       topFingerprints: fpList.slice(0, 5),
-      totalWeighted:  Object.keys(this.state.weights).length,
+      totalWeighted:   Object.keys(this.state.weights).length,
+      recommendations: this.getRecommendations(),
     };
   }
 
@@ -444,8 +532,23 @@ class Brain {
   // ── localStorage persistence ───────────────────────────────────────────────
   _save() {
     try {
-      // Keep pendingChecks lean (strip full candle arrays if present)
-      const toSave = { ...this.state, pendingChecks: (this.state.pendingChecks || []).slice(-20) };
+      // Fix #3: Keep ALL pending checks but strip heavy candle arrays so storage stays lean
+      const cleanedChecks = (this.state.pendingChecks || []).map(c => ({
+        ...c,
+        signal: {
+          symbol:      c.signal.symbol,
+          direction:   c.signal.direction,
+          entry:       c.signal.entry,
+          sl:          c.signal.sl,
+          tp1:         c.signal.tp1,
+          tp2:         c.signal.tp2,
+          timestamp:   c.signal.timestamp,
+          confidence:  c.signal.confidence,
+          features:    c.signal.features,
+          fingerprint: c.signal.fingerprint,
+        },
+      }));
+      const toSave = { ...this.state, pendingChecks: cleanedChecks };
       localStorage.setItem('cnax_brain_v1', JSON.stringify(toSave));
     } catch (e) {
       console.warn('Brain save failed (storage full?):', e.message);

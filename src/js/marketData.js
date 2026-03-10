@@ -613,10 +613,10 @@ class MarketData {
   static getKillZone() {
     const { hour, minute } = MarketData.toET(new Date());
     const hm = hour * 60 + minute;
-    if (hm >= 120  && hm < 300)  return { zone: 'london',  label: '🇬🇧 London KZ',    boost: 12, color: '#3b82f6' };
-    if (hm >= 480  && hm < 660)  return { zone: 'ny_open', label: '🇺🇸 NY Open KZ',   boost: 15, color: '#10b981' };
-    if (hm >= 780  && hm < 900)  return { zone: 'ny_pm',   label: '🇺🇸 NY PM KZ',     boost: 10, color: '#f59e0b' };
-    if (hm >= 1140 || hm < 60)   return { zone: 'asian',   label: '🌏 Asian KZ',      boost: 6,  color: '#8b5cf6' };
+    if (hm >= 120  && hm < 300)  return { zone: 'london',  label: 'London KZ',    boost: 12, color: '#3b82f6' };
+    if (hm >= 480  && hm < 660)  return { zone: 'ny_open', label: 'NY Open KZ',   boost: 15, color: '#10b981' };
+    if (hm >= 780  && hm < 900)  return { zone: 'ny_pm',   label: 'NY PM KZ',     boost: 10, color: '#f59e0b' };
+    if (hm >= 1140 || hm < 60)   return { zone: 'asian',   label: 'Asian KZ',     boost: 6,  color: '#8b5cf6' };
     return { zone: 'none', label: null, boost: 0, color: '#64748b' };
   }
 

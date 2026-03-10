@@ -131,33 +131,60 @@ class Backtester {
 
   // ── Build result summary from trade list ──────────────────────────────────
   _buildResult(symbol, interval, trades, equity, accountSize, maxDrawdown) {
-    const wins         = trades.filter(t => t.outcome === 'win');
-    const losses       = trades.filter(t => t.outcome === 'loss');
-    const be           = trades.filter(t => t.outcome === 'breakeven');
-    const winRate      = (wins.length / trades.length) * 100;
-    const avgR         = trades.reduce((a, t) => a + t.rMultiple, 0) / trades.length;
-    const totalPnL     = equity - accountSize;
+    const wins    = trades.filter(t => t.outcome === 'win');
+    const losses  = trades.filter(t => t.outcome === 'loss');
+    const be      = trades.filter(t => t.outcome === 'breakeven');
+    const winRate = (wins.length / trades.length) * 100;
+    const avgR    = trades.reduce((a, t) => a + t.rMultiple, 0) / trades.length;
+    const totalPnL = equity - accountSize;
+
     const profitFactor = losses.length > 0
       ? wins.reduce((a, t) => a + Math.abs(t.rMultiple), 0) /
         losses.reduce((a, t) => a + Math.abs(t.rMultiple), 0)
       : wins.length > 0 ? 99 : 0;
 
+    // Fix #8: Additional stats — expectancy, streaks, recovery factor
+    const avgWinR  = wins.length   > 0 ? wins.reduce((a, t)   => a + t.rMultiple, 0) / wins.length   : 0;
+    const avgLossR = losses.length > 0 ? losses.reduce((a, t) => a + Math.abs(t.rMultiple), 0) / losses.length : 1;
+    const wr01     = winRate / 100;
+    const expectancy = parseFloat(((wr01 * avgWinR) - ((1 - wr01) * avgLossR)).toFixed(3));
+
+    let maxConsecWins = 0, maxConsecLosses = 0, streak = 0, lastOutcome = null;
+    for (const t of trades) {
+      if (t.outcome === lastOutcome && t.outcome !== 'breakeven') {
+        streak++;
+      } else {
+        streak = 1;
+        lastOutcome = t.outcome;
+      }
+      if (lastOutcome === 'win')  maxConsecWins   = Math.max(maxConsecWins, streak);
+      if (lastOutcome === 'loss') maxConsecLosses = Math.max(maxConsecLosses, streak);
+    }
+
+    const recoveryFactor = maxDrawdown > 0
+      ? parseFloat(((totalPnL / accountSize * 100) / maxDrawdown).toFixed(2))
+      : 0;
+
     const result = {
       symbol,
       interval,
-      totalTrades:  trades.length,
-      wins:         wins.length,
-      losses:       losses.length,
-      breakevens:   be.length,
-      winRate:      parseFloat(winRate.toFixed(1)),
-      avgR:         parseFloat(avgR.toFixed(2)),
-      totalPnL:     parseFloat(totalPnL.toFixed(2)),
-      totalPnLPct:  parseFloat((totalPnL / accountSize * 100).toFixed(2)),
-      maxDrawdown:  parseFloat(maxDrawdown.toFixed(1)),
-      profitFactor: parseFloat(profitFactor.toFixed(2)),
-      finalEquity:  parseFloat(equity.toFixed(2)),
-      trades:       trades.slice(-50),
-      timestamp:    new Date(),
+      totalTrades:     trades.length,
+      wins:            wins.length,
+      losses:          losses.length,
+      breakevens:      be.length,
+      winRate:         parseFloat(winRate.toFixed(1)),
+      avgR:            parseFloat(avgR.toFixed(2)),
+      totalPnL:        parseFloat(totalPnL.toFixed(2)),
+      totalPnLPct:     parseFloat((totalPnL / accountSize * 100).toFixed(2)),
+      maxDrawdown:     parseFloat(maxDrawdown.toFixed(1)),
+      profitFactor:    parseFloat(profitFactor.toFixed(2)),
+      expectancy,
+      maxConsecWins,
+      maxConsecLosses,
+      recoveryFactor,
+      finalEquity:     parseFloat(equity.toFixed(2)),
+      trades:          trades.slice(-50),
+      timestamp:       new Date(),
     };
     this.results[symbol] = result;
     return result;

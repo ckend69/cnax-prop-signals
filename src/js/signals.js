@@ -1100,7 +1100,7 @@ class SignalEngine {
       const ev = relevantNews[0];
       const penalty = ev.minutesAway <= 5 ? 25 : 12;
       bullScore -= penalty; bearScore -= penalty;  // penalise both sides
-      reasons.push(`⚠ ${ev.title} (${ev.currency}) in ~${Math.max(0, ev.minutesAway)} min — reduced confidence`);
+      reasons.push(`[WARN] ${ev.title} (${ev.currency}) in ~${Math.max(0, ev.minutesAway)} min — reduced confidence`);
     }
 
     // ── Brain bonuses (applied after all manual indicators) ────────────────
@@ -1122,9 +1122,13 @@ class SignalEngine {
     }
 
     // ── Final decision ─────────────────────────────────────────────────────
-    const winScore  = Math.max(bullScore, bearScore);
     const direction = bullScore > bearScore ? 'BUY' : 'SELL';
     const features  = direction === 'BUY' ? bullFeatures : bearFeatures;
+
+    // Cap raw score to MAX_SCORE before converting to %, so brain bonuses
+    // can never push confidence above 100% (double-guarded by Math.min below)
+    const rawScore  = Math.max(bullScore, bearScore);
+    const winScore  = Math.min(rawScore, this.MAX_SCORE);
 
     // Learning engine manual adjustment (from WIN/LOSS buttons in journal)
     const learnAdj   = window.learningEngine?.getAdjustment(symbol, direction) || 0;
@@ -1192,7 +1196,7 @@ class SignalEngine {
     if (ote !== 'none')                 patterns.push(ote === 'bullish' ? 'Fib OTE ▲'        : 'Fib OTE ▼');
     if (po3.phase === 'distribution')   patterns.push(po3.direction === 'bullish' ? 'PO3 ▲'  : 'PO3 ▼');
     if (po3.phase === 'accumulation')   patterns.push('PO3 Accum');
-    if (relevantNews.length > 0)        patterns.push('⚠ News');
+    if (relevantNews.length > 0)        patterns.push('News');
 
     // ── Signal object ──────────────────────────────────────────────────────
     const timeframeLabel = is1m ? '1m' : (is5m ? '5m' : '1H');

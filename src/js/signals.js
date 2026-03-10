@@ -1239,7 +1239,6 @@ class SignalEngine {
       fundingRate:    fundingRate,
       reasons:        reasons.slice(0, 10),
       timestamp:      new Date(),
-      simulated:      candles[0]?.simulated || false,
       timeframe:      timeframeLabel,
       timingHint,
       previewCandles: candles.slice(-40),  // for mini chart rendering

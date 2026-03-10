@@ -37,26 +37,6 @@ const INSTRUMENTS = {
   'AVAXUSDT': { type: 'crypto', binance: 'AVAXUSDT', display: 'AVAX/USDT', pip: 0.01    },
 };
 
-const SEED_PRICES = {
-  EURUSD: 1.0842, GBPUSD: 1.2643, USDJPY: 149.85, GBPJPY: 189.60,
-  XAUUSD: 2385.0, AUDUSD: 0.6521, USDCAD: 1.3612,
-  EURJPY: 162.50, NZDUSD: 0.6015, USDCHF: 0.8950, EURCAD: 1.4720, GBPAUD: 1.9350,
-  ES: 5285, NQ: 18420, YM: 38950, RTY: 2050, CL: 78.4, GC: 2385, SI: 28.5, NG: 2.15,
-  MNQ: 18420, MES: 5285,
-  BTCUSDT: 68000, ETHUSDT: 3520, SOLUSDT: 182,
-  BNBUSDT: 580, XRPUSDT: 0.62, DOGEUSDT: 0.18, LINKUSDT: 18.5, AVAXUSDT: 38.0,
-};
-
-const SIM_VOLATILITY = {
-  EURUSD: 0.0004, GBPUSD: 0.0005, USDJPY: 0.0004, GBPJPY: 0.0006,
-  XAUUSD: 0.0008, AUDUSD: 0.0004, USDCAD: 0.0004,
-  EURJPY: 0.0005, NZDUSD: 0.0004, USDCHF: 0.0004, EURCAD: 0.0005, GBPAUD: 0.0006,
-  ES: 0.0025, NQ: 0.0035, YM: 0.0030, RTY: 0.0030, CL: 0.006, GC: 0.0025,
-  SI: 0.0030, NG: 0.010,
-  MNQ: 0.0035, MES: 0.0025,
-  BTCUSDT: 0.012, ETHUSDT: 0.014, SOLUSDT: 0.018,
-  BNBUSDT: 0.016, XRPUSDT: 0.020, DOGEUSDT: 0.025, LINKUSDT: 0.018, AVAXUSDT: 0.020,
-};
 
 class MarketData {
   constructor() {
@@ -262,8 +242,8 @@ class MarketData {
         }
       }
     } catch(e) {
-      console.warn(`Live 1m fetch failed for ${symbol} — using simulated candles:`, e.message);
-      candles = this._generateRealisticCandles(symbol, limit, '1m');
+      console.error(`Live 1m fetch failed for ${symbol}:`, e.message);
+      throw e;
     }
 
     candles = (candles || []).filter(c => c.close > 0 && c.open > 0 && c.high > 0 && c.low > 0);
@@ -328,8 +308,8 @@ class MarketData {
         }
       }
     } catch(e) {
-      console.warn(`Live data fetch failed ${symbol} ${interval} — using simulated candles:`, e.message);
-      candles = this._generateRealisticCandles(symbol, limit, interval);
+      console.error(`Live data fetch failed ${symbol} ${interval}:`, e.message);
+      throw e;
     }
 
     candles = (candles || []).filter(c => c.close > 0 && c.open > 0 && c.high > 0 && c.low > 0);
@@ -522,37 +502,6 @@ class MarketData {
     if (window.electronAPI) return window.electronAPI.fetchUrl(url);
     const r = await fetch(url);
     return r.json();
-  }
-
-  // ── Simulated candles fallback ────────────────────────────────────────────
-  _generateRealisticCandles(symbol, count, interval = '1h') {
-    const base    = SEED_PRICES[symbol] || 1.0;
-    const volFrac = SIM_VOLATILITY[symbol] || 0.001;
-    const tfScale = { '1m': 0.05, '5m': 0.12, '15m': 0.25, '1h': 1.0, '4h': 1.8, '1d': 3.5 }[interval] || 1.0;
-    const msPer   = { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000, '1d': 86400000 }[interval] || 3600000;
-    const vol     = base * volFrac * tfScale;
-
-    let price = base;
-    const drift = (Math.random() - 0.5) * 0.0002;
-    const candles = [];
-    const now = Date.now();
-
-    for (let i = count; i >= 0; i--) {
-      const change = (Math.random() - 0.495 + drift) * vol;
-      const open   = price;
-      price        = Math.max(price * 0.95, price + change);
-      const wick   = Math.random() * vol * 0.4;
-      candles.push({
-        time:      now - i * msPer,
-        open:      parseFloat(open.toFixed(5)),
-        high:      parseFloat((Math.max(open, price) + wick).toFixed(5)),
-        low:       parseFloat((Math.min(open, price) - wick).toFixed(5)),
-        close:     parseFloat(price.toFixed(5)),
-        volume:    Math.floor(Math.random() * 5000) + 500,
-        simulated: true,
-      });
-    }
-    return candles;
   }
 
   // ── Market hours ──────────────────────────────────────────────────────────

@@ -389,10 +389,6 @@
       background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.2);
       color: var(--amber); border-radius: 6px; padding: 4px 10px; font-size: 11px;
     }
-    .sc-sim-badge {
-      font-size: 10px; color: var(--muted); background: var(--surface2);
-      border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px;
-    }
     .pos-size-chip {
       font-family: var(--mono); font-size: 12px; font-weight: 700;
       background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2);
@@ -1008,7 +1004,7 @@
     <div class="field">
       <label>Alpha Vantage API Key (Forex Data)</label>
       <input type="password" id="set-av" placeholder="alphavantage.co/support → free key" />
-      <div class="hint">Free key — enables live EUR/USD, GBP/USD, XAU/USD data. Without it, realistic simulated prices are used.</div>
+      <div class="hint">Free key — enables live EUR/USD, GBP/USD, XAU/USD data. Without it, Yahoo Finance is used for forex candles.</div>
     </div>
 
     <div class="field">
@@ -1860,7 +1856,6 @@ function renderCard(s) {
         ${!s.blocked && s.posSize ? `<div class="pos-size-chip">Suggested: ${posStr}</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        ${s.simulated ? '<span class="sc-sim-badge">SIMULATED DATA</span>' : ''}
         <span class="sc-time">${new Date(s.timestamp).toLocaleTimeString()}</span>
       </div>
     </div>

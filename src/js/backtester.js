@@ -227,7 +227,6 @@ class Backtester {
 
     // Neither SL nor TP hit within the forward window — time exit at last close
     const lastClose = futureCandles[futureCandles.length - 1].close;
-    const slDist    = Math.abs(entry - sl);
     const pnl       = isBuy ? (lastClose - entry) : (entry - lastClose);
     const rMult     = slDist > 0 ? pnl / slDist : 0;
     const result    = rMult > 0.3 ? 'win' : rMult < -0.3 ? 'loss' : 'breakeven';

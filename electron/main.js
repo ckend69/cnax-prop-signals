@@ -29,6 +29,12 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
+  // Forward renderer console output to terminal for debugging
+  mainWindow.webContents.on('console-message', (_e, level, msg, line, src) => {
+    const tag = ['log','info','warn','error'][level] || 'log';
+    if (tag === 'warn' || tag === 'error') console.log(`[renderer:${tag}] ${msg}`);
+  });
+
   // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);

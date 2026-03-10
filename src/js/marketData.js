@@ -262,8 +262,8 @@ class MarketData {
         }
       }
     } catch(e) {
-      console.error(`Live 1m fetch failed for ${symbol}:`, e.message);
-      candles = [];
+      console.warn(`Live 1m fetch failed for ${symbol} — using simulated candles:`, e.message);
+      candles = this._generateRealisticCandles(symbol, limit, '1m');
     }
 
     candles = (candles || []).filter(c => c.close > 0 && c.open > 0 && c.high > 0 && c.low > 0);
@@ -328,8 +328,8 @@ class MarketData {
         }
       }
     } catch(e) {
-      console.error(`Live data fetch failed ${symbol} ${interval}:`, e.message);
-      candles = [];
+      console.warn(`Live data fetch failed ${symbol} ${interval} — using simulated candles:`, e.message);
+      candles = this._generateRealisticCandles(symbol, limit, interval);
     }
 
     candles = (candles || []).filter(c => c.close > 0 && c.open > 0 && c.high > 0 && c.low > 0);

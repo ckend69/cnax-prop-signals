@@ -194,10 +194,15 @@ class Backtester {
   _simulateTrade(signal, futureCandles, interval) {
     if (!futureCandles || futureCandles.length === 0) return null;
 
-    const isBuy = signal.direction === 'BUY';
-    const entry = signal.entry;
-    const sl    = signal.sl;
-    const tp1   = signal.tp1;
+    const isBuy  = signal.direction === 'BUY';
+    const entry  = signal.entry;
+    const sl     = signal.sl;
+    const tp1    = signal.tp1;
+    const slDist = Math.abs(entry - sl);
+    // Actual R-multiple at TP1 derived from real signal prices, not a hardcoded constant
+    const winR   = slDist > 0
+      ? parseFloat((Math.abs(tp1 - entry) / slDist).toFixed(2))
+      : 2.0;
 
     for (let i = 0; i < futureCandles.length; i++) {
       const c = futureCandles[i];
@@ -212,12 +217,12 @@ class Backtester {
         const distToSL = Math.abs(c.open - sl);
         const distToTP = Math.abs(c.open - tp1);
         return distToTP <= distToSL
-          ? { result: 'win',  rMultiple: +2.0, barsHeld: i + 1 }
+          ? { result: 'win',  rMultiple: winR, barsHeld: i + 1 }
           : { result: 'loss', rMultiple: -1.0, barsHeld: i + 1 };
       }
 
       if (slHit) return { result: 'loss', rMultiple: -1.0, barsHeld: i + 1 };
-      if (tpHit) return { result: 'win',  rMultiple: +2.0, barsHeld: i + 1 };
+      if (tpHit) return { result: 'win',  rMultiple: winR, barsHeld: i + 1 };
     }
 
     // Neither SL nor TP hit within the forward window — time exit at last close

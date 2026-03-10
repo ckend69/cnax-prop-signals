@@ -179,8 +179,9 @@ class Brain {
       const { signal } = check;
       if (!signal || !signal.tp1 || !signal.sl) return;
 
-      // Fetch recent 1m candles
-      const candles = await window.marketData.getCandles(signal.symbol, '1m', 30);
+      // Fetch recent 1m candles — 120 bars = 2h of history, enough for recovered
+      // pending checks that were rescheduled after an app restart
+      const candles = await window.marketData.getCandles(signal.symbol, '1m', 120);
       if (!candles || candles.length < 5) return;
 
       // Only consider candles that occurred AFTER signal generation
@@ -285,9 +286,10 @@ class Brain {
       if (!this.state.symbolFeatureStats[sym]) this.state.symbolFeatureStats[sym] = {};
       for (const feat of features) {
         if (!this.state.symbolFeatureStats[sym][feat])
-          this.state.symbolFeatureStats[sym][feat] = { wins: 0, losses: 0 };
+          this.state.symbolFeatureStats[sym][feat] = { wins: 0, losses: 0, lastTs: 0 };
         if (win) this.state.symbolFeatureStats[sym][feat].wins++;
         else     this.state.symbolFeatureStats[sym][feat].losses++;
+        this.state.symbolFeatureStats[sym][feat].lastTs = Date.now();
       }
     }
 
@@ -359,14 +361,16 @@ class Brain {
       this.state.weights[feat] = parseFloat(Math.max(0.3, Math.min(2.0, weight)).toFixed(3));
     }
 
-    // Per-symbol weights
+    // Per-symbol weights — same half-life decay as global weights
     for (const [sym, featMap] of Object.entries(this.state.symbolFeatureStats)) {
       if (!this.state.symbolWeights[sym]) this.state.symbolWeights[sym] = {};
       for (const [feat, stat] of Object.entries(featMap)) {
         const total = stat.wins + stat.losses;
         if (total < 3) continue;
-        const wr     = stat.wins / total;
-        const weight = 0.3 + wr * 1.7;
+        const wr        = stat.wins / total;
+        const rawWeight = 0.3 + wr * 1.7;
+        const decay     = stat.lastTs ? Math.pow(0.5, (now - stat.lastTs) / halfLifeMs) : 0.5;
+        const weight    = 1.0 + (rawWeight - 1.0) * Math.max(0.1, decay);
         this.state.symbolWeights[sym][feat] = parseFloat(Math.max(0.3, Math.min(2.0, weight)).toFixed(3));
       }
     }

@@ -187,13 +187,13 @@ class NewsSentiment {
       let rawScore = art.score !== undefined ? art.score * 100 :
                      (pos - neg) / Math.max(1, pos + neg) * 100;
 
-      const weight = isHighImpact ? 2 : 1;
-      totalScore  += rawScore * weight;
-      totalWeight += weight;
-
-      // Recency decay: articles > 6h old have less weight
+      // Recency decay: fold age into weight so stale articles score less
       const ageHours = (Date.now() - (art.time || 0)) / 3600000;
       const recency  = ageHours < 1 ? 1.0 : ageHours < 6 ? 0.8 : 0.5;
+
+      const weight = (isHighImpact ? 2 : 1) * recency;
+      totalScore  += rawScore * weight;
+      totalWeight += weight;
 
       scored.push({
         ...art,

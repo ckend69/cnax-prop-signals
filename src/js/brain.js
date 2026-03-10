@@ -51,34 +51,50 @@ class Brain {
       'tjr_choch_bull', 'tjr_choch_bear',
       'tjr_bos_bull', 'tjr_bos_bear',
       'tjr_discount', 'tjr_premium',
+      // ICT Kill Zone
+      'kill_zone',
+      // VWAP
+      'vwap_above', 'vwap_below',
+      // Fibonacci OTE
+      'fib_ote_bull', 'fib_ote_bear',
+      // ICT Power of 3
+      'po3_bull', 'po3_bear',
+      // Crypto Funding Rate
+      'funding_bull', 'funding_bear',
+      // Currency Strength
+      'strength_bull', 'strength_bear',
     ];
 
     const saved = this._load();
     this.state = saved || this._freshState();
 
     // Self-correct any missing fields from older saves
-    if (!this.state.featureStats)     this.state.featureStats     = {};
-    if (!this.state.comboStats)       this.state.comboStats       = {};
-    if (!this.state.confluenceStats)  this.state.confluenceStats  = {};
-    if (!this.state.fingerprintStats) this.state.fingerprintStats = {};
-    if (!this.state.pendingChecks)    this.state.pendingChecks    = [];
-    if (!this.state.weights)          this.state.weights          = {};
-    if (!this.state.totalLearned)     this.state.totalLearned     = 0;
-    if (!this.state.totalWins)        this.state.totalWins        = 0;
-    if (!this.state.totalLosses)      this.state.totalLosses      = 0;
+    if (!this.state.featureStats)       this.state.featureStats       = {};
+    if (!this.state.comboStats)         this.state.comboStats         = {};
+    if (!this.state.confluenceStats)    this.state.confluenceStats    = {};
+    if (!this.state.fingerprintStats)   this.state.fingerprintStats   = {};
+    if (!this.state.symbolFeatureStats) this.state.symbolFeatureStats = {};
+    if (!this.state.pendingChecks)      this.state.pendingChecks      = [];
+    if (!this.state.weights)            this.state.weights            = {};
+    if (!this.state.symbolWeights)      this.state.symbolWeights      = {};
+    if (!this.state.totalLearned)       this.state.totalLearned       = 0;
+    if (!this.state.totalWins)          this.state.totalWins          = 0;
+    if (!this.state.totalLosses)        this.state.totalLosses        = 0;
   }
 
   _freshState() {
     return {
-      weights:          {},
-      featureStats:     {},   // feature -> { wins, losses }
-      comboStats:       {},   // 'feat1:feat2' -> { wins, losses }
-      confluenceStats:  {},   // String(n) -> { wins, losses }
-      fingerprintStats: {},   // '3bar-code' -> { wins, losses }
-      pendingChecks:    [],   // { signal, checkAt }
-      totalLearned:     0,
-      totalWins:        0,
-      totalLosses:      0,
+      weights:            {},  // feature -> learned weight multiplier
+      symbolWeights:      {},  // symbol -> { feature -> weight }
+      featureStats:       {},  // feature -> { wins, losses, lastTs }
+      comboStats:         {},  // 'feat1:feat2' -> { wins, losses }
+      confluenceStats:    {},  // String(n) -> { wins, losses }
+      fingerprintStats:   {},  // '3bar-code' -> { wins, losses }
+      symbolFeatureStats: {},  // symbol -> { feature -> { wins, losses } }
+      pendingChecks:      [],  // { signal, checkAt }
+      totalLearned:       0,
+      totalWins:          0,
+      totalLosses:        0,
     };
   }
 
@@ -197,6 +213,23 @@ class Brain {
         if (typeof window._brainLog === 'function') {
           window._brainLog(msg, result === 'WIN' ? 'win' : 'loss');
         }
+        // Desktop notification with trailing stop guidance on WIN
+        if (result === 'WIN' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          const tp2Str = signal.tp2 ? ` → trail to TP2 ${signal.tp2.toFixed ? signal.tp2.toFixed(4) : signal.tp2}` : '';
+          new Notification(`✅ TP1 Hit — ${signal.symbol} ${signal.direction}`, {
+            body: `Move SL to breakeven (${signal.entry?.toFixed ? signal.entry.toFixed(4) : signal.entry})${tp2Str}`,
+            silent: false,
+          });
+          if (typeof window._brainLog === 'function') {
+            window._brainLog(`💹 ${signal.symbol}: TP1 hit — move SL to breakeven, trail toward TP2`, 'win');
+          }
+        }
+        if (result === 'LOSS' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(`❌ SL Hit — ${signal.symbol} ${signal.direction}`, {
+            body: `Stop loss triggered. Brain weight updated.`,
+            silent: true,
+          });
+        }
       }
 
       // Remove from pending regardless
@@ -222,11 +255,26 @@ class Brain {
     const win        = result === 'WIN';
     const n          = features.length;
 
-    // Feature stats (individual indicator win-rates)
+    const now = Date.now();
+
+    // Feature stats (individual indicator win-rates) + recency timestamp
     for (const feat of features) {
       if (!this.state.featureStats[feat]) this.state.featureStats[feat] = { wins: 0, losses: 0 };
       if (win) this.state.featureStats[feat].wins++;
       else     this.state.featureStats[feat].losses++;
+      this.state.featureStats[feat].lastTs = now;  // track recency for decay
+    }
+
+    // Per-symbol feature stats (symbol-specific learning)
+    const sym = signal.symbol;
+    if (sym) {
+      if (!this.state.symbolFeatureStats[sym]) this.state.symbolFeatureStats[sym] = {};
+      for (const feat of features) {
+        if (!this.state.symbolFeatureStats[sym][feat])
+          this.state.symbolFeatureStats[sym][feat] = { wins: 0, losses: 0 };
+        if (win) this.state.symbolFeatureStats[sym][feat].wins++;
+        else     this.state.symbolFeatureStats[sym][feat].losses++;
+      }
     }
 
     // Combo stats (pairwise)
@@ -265,17 +313,49 @@ class Brain {
   }
 
   // ── Recalculate feature weights from observed win-rates ───────────────────
+  // Uses time-decay: weights fade back towards neutral (1.0) if no recent outcomes.
+  // Half-life of 14 days — a feature with no activity for 14 days retains 50% of its learned edge.
   _recalcWeights() {
+    const now         = Date.now();
+    const halfLifeMs  = 14 * 24 * 60 * 60 * 1000;  // 14-day half-life
+
+    // Global weights (all symbols combined)
     for (const [feat, stat] of Object.entries(this.state.featureStats)) {
       const total = stat.wins + stat.losses;
-      if (total < 3) continue;   // need at least 3 samples before adjusting
+      if (total < 3) continue;
 
-      const wr = stat.wins / total;
-      // Linear mapping: 0% WR → 0.3, 50% WR → 1.0, 100% WR → 2.0
-      // Formula: 0.3 + wr * 1.7   clamped to [0.3, 2.0]
-      const weight = 0.3 + wr * 1.7;
+      const wr        = stat.wins / total;
+      const rawWeight = 0.3 + wr * 1.7;   // 0% WR→0.3, 50%→1.0, 100%→2.0
+
+      // Staleness decay: blend rawWeight toward neutral (1.0) based on how stale the data is
+      const decay  = stat.lastTs ? Math.pow(0.5, (now - stat.lastTs) / halfLifeMs) : 0.5;
+      const weight = 1.0 + (rawWeight - 1.0) * Math.max(0.1, decay);
+
       this.state.weights[feat] = parseFloat(Math.max(0.3, Math.min(2.0, weight)).toFixed(3));
     }
+
+    // Per-symbol weights
+    for (const [sym, featMap] of Object.entries(this.state.symbolFeatureStats)) {
+      if (!this.state.symbolWeights[sym]) this.state.symbolWeights[sym] = {};
+      for (const [feat, stat] of Object.entries(featMap)) {
+        const total = stat.wins + stat.losses;
+        if (total < 3) continue;
+        const wr     = stat.wins / total;
+        const weight = 0.3 + wr * 1.7;
+        this.state.symbolWeights[sym][feat] = parseFloat(Math.max(0.3, Math.min(2.0, weight)).toFixed(3));
+      }
+    }
+  }
+
+  // ── Per-symbol weight getter ───────────────────────────────────────────────
+  // Returns a blend of global weight (70%) and symbol-specific weight (30%).
+  // Falls back to global weight alone if not enough symbol-specific data.
+  getSymbolWeight(symbol, feature) {
+    const symW = this.state.symbolWeights?.[symbol]?.[feature];
+    const glbW = this.getWeight(feature);
+    if (symW === undefined) return glbW;
+    // Blend: 70% global + 30% symbol-specific for robustness
+    return parseFloat((glbW * 0.7 + symW * 0.3).toFixed(3));
   }
 
   // ── 3-bar candle fingerprint ───────────────────────────────────────────────

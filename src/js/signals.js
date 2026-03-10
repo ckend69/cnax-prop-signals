@@ -1,11 +1,11 @@
-// signals.js — Technical analysis engine, signal generator, and risk manager
+// signals.js — Technical analysis engine, signal generator, risk manager
+// Supports 1H (trend) + 1m (entry timing) + daily bias analysis.
 
 class TechnicalAnalysis {
-
-  // ── Exponential Moving Average ─────────────────────────────────────────────
+  // ── Moving Averages ────────────────────────────────────────────────────────
   static ema(closes, period) {
     if (closes.length < period) return [];
-    const k      = 2 / (period + 1);
+    const k = 2 / (period + 1);
     const result = [closes.slice(0, period).reduce((a, b) => a + b, 0) / period];
     for (let i = period; i < closes.length; i++) {
       result.push(closes[i] * k + result[result.length - 1] * (1 - k));
@@ -13,7 +13,6 @@ class TechnicalAnalysis {
     return result;
   }
 
-  // ── Simple Moving Average ──────────────────────────────────────────────────
   static sma(closes, period) {
     return closes.map((_, i) => {
       if (i < period - 1) return null;
@@ -25,14 +24,13 @@ class TechnicalAnalysis {
   static rsi(closes, period = 14) {
     if (closes.length <= period) return 50;
     const changes = closes.slice(1).map((c, i) => c - closes[i]);
-    let avgGain   = changes.slice(0, period).filter(c => c > 0).reduce((a, b) => a + b, 0) / period;
-    let avgLoss   = Math.abs(changes.slice(0, period).filter(c => c < 0).reduce((a, b) => a + b, 0)) / period;
-
+    let avgGain = changes.slice(0, period).filter(c => c > 0).reduce((a, b) => a + b, 0) / period;
+    let avgLoss = Math.abs(changes.slice(0, period).filter(c => c < 0).reduce((a, b) => a + b, 0)) / period;
     for (let i = period; i < changes.length; i++) {
       const gain = changes[i] > 0 ? changes[i] : 0;
       const loss = changes[i] < 0 ? Math.abs(changes[i]) : 0;
-      avgGain    = (avgGain * (period - 1) + gain) / period;
-      avgLoss    = (avgLoss * (period - 1) + loss) / period;
+      avgGain = (avgGain * (period - 1) + gain) / period;
+      avgLoss = (avgLoss * (period - 1) + loss) / period;
     }
     if (avgLoss === 0) return 100;
     return 100 - (100 / (1 + avgGain / avgLoss));
@@ -46,12 +44,11 @@ class TechnicalAnalysis {
     const offset     = emaFast.length - emaSlow.length;
     const macdLine   = emaSlow.map((v, i) => emaFast[i + offset] - v);
     const signalLine = this.ema(macdLine, signal);
-    if (!signalLine.length) return { macd: macdLine[macdLine.length-1] || 0, signal: 0, histogram: 0, bullish: false, bearish: false };
+    if (!signalLine.length) return { macd: macdLine[macdLine.length - 1] || 0, signal: 0, histogram: 0, bullish: false, bearish: false };
     const sigOffset  = macdLine.length - signalLine.length;
     const histogram  = signalLine.map((v, i) => macdLine[i + sigOffset] - v);
     const lastHist   = histogram[histogram.length - 1] || 0;
     const prevHist   = histogram[histogram.length - 2] || 0;
-
     return {
       macd:      macdLine[macdLine.length - 1] || 0,
       signal:    signalLine[signalLine.length - 1] || 0,
@@ -61,7 +58,7 @@ class TechnicalAnalysis {
     };
   }
 
-  // ── ATR (Average True Range) ───────────────────────────────────────────────
+  // ── ATR ───────────────────────────────────────────────────────────────────
   static atr(candles, period = 14) {
     if (candles.length < period + 1) return 0;
     const trs = candles.slice(1).map((c, i) => {
@@ -85,7 +82,7 @@ class TechnicalAnalysis {
     return { upper: mid + stdDev * std, mid, lower: mid - stdDev * std, std };
   }
 
-  // ── Stochastic %K (fast) ──────────────────────────────────────────────────
+  // ── Stochastic %K ─────────────────────────────────────────────────────────
   static stochastic(candles, period = 14) {
     if (candles.length < period) return 50;
     const slice   = candles.slice(-period);
@@ -96,7 +93,7 @@ class TechnicalAnalysis {
     return ((last - lowMin) / (highMax - lowMin)) * 100;
   }
 
-  // ── Volume signal ─────────────────────────────────────────────────────────
+  // ── Volume Signal ─────────────────────────────────────────────────────────
   static volumeSignal(candles, period = 20) {
     if (candles.length < period + 1) return 'normal';
     const avgVol  = candles.slice(-period - 1, -1).reduce((a, b) => a + b.volume, 0) / period;
@@ -107,37 +104,25 @@ class TechnicalAnalysis {
     return 'normal';
   }
 
-  // ── Support & Resistance (swing pivot detection) ───────────────────────────
-  // Uses 5-bar pivot logic instead of simple top-N sort to find real levels.
+  // ── Support & Resistance (swing pivot detection) ──────────────────────────
   static keyLevels(candles, lookback = 60) {
     const slice      = candles.slice(-lookback);
-    const swingHighs = [];
-    const swingLows  = [];
-
+    const swingHighs = [], swingLows = [];
     for (let i = 2; i < slice.length - 2; i++) {
       const c = slice[i];
       if (c.high > slice[i-1].high && c.high > slice[i-2].high &&
-          c.high > slice[i+1].high && c.high > slice[i+2].high) {
-        swingHighs.push(c.high);
-      }
-      if (c.low < slice[i-1].low && c.low < slice[i-2].low &&
-          c.low < slice[i+1].low && c.low < slice[i+2].low) {
-        swingLows.push(c.low);
-      }
+          c.high > slice[i+1].high && c.high > slice[i+2].high) swingHighs.push(c.high);
+      if (c.low  < slice[i-1].low  && c.low  < slice[i-2].low  &&
+          c.low  < slice[i+1].low  && c.low  < slice[i+2].low)  swingLows.push(c.low);
     }
-
-    // Use most recent swing level, fall back to period extreme
-    const highs = slice.map(c => c.high);
-    const lows  = slice.map(c => c.low);
+    const highs = slice.map(c => c.high), lows = slice.map(c => c.low);
     return {
       resistance: swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : Math.max(...highs),
       support:    swingLows.length  > 0 ? swingLows[swingLows.length - 1]   : Math.min(...lows),
-      swingHighs,
-      swingLows,
     };
   }
 
-  // ── ATR volatility regime (high/normal/low relative to 20-bar ATR average) ─
+  // ── Volatility regime ─────────────────────────────────────────────────────
   static volatilityRegime(candles) {
     if (candles.length < 35) return 'normal';
     const current = this.atr(candles, 14);
@@ -149,18 +134,216 @@ class TechnicalAnalysis {
     return 'normal';
   }
 
-  // ── 4H macro trend direction (simplified EMA stack on 4H) ─────────────────
+  // ── 4H macro trend ────────────────────────────────────────────────────────
   static macroTrend(candles4H) {
     if (!candles4H || candles4H.length < 30) return null;
     const closes = candles4H.map(c => c.close);
     const ema9   = this.ema(closes, 9);
     const ema21  = this.ema(closes, 21);
     if (!ema9.length || !ema21.length) return null;
-    const e9  = ema9[ema9.length - 1];
-    const e21 = ema21[ema21.length - 1];
+    const e9 = ema9[ema9.length - 1], e21 = ema21[ema21.length - 1];
     const cur = closes[closes.length - 1];
     if (cur > e9 && e9 > e21) return 'bullish';
     if (cur < e9 && e9 < e21) return 'bearish';
+    return 'neutral';
+  }
+
+  // ── 1m momentum score (for entry timing) ─────────────────────────────────
+  // Returns a score from -100 (strong bear 1m) to +100 (strong bull 1m)
+  static momentum1m(candles1m) {
+    if (!candles1m || candles1m.length < 10) return 0;
+    const closes  = candles1m.map(c => c.close);
+    const current = closes[closes.length - 1];
+
+    const rsi     = this.rsi(closes.slice(-20), 14);
+    const macd    = this.macd(closes.slice(-30));
+    const vol     = this.volumeSignal(candles1m.slice(-20));
+
+    // Recent 5-bar direction
+    const move5   = (closes[closes.length - 1] - closes[closes.length - 6]) /
+                     closes[closes.length - 6] * 100;
+
+    let score = 0;
+    if (rsi > 55)        score += 25;
+    else if (rsi < 45)   score -= 25;
+    if (macd.bullish)    score += 30;
+    else if (macd.bearish) score -= 30;
+    if (move5 > 0.01)    score += 25;
+    else if (move5 < -0.01) score -= 25;
+    if (vol === 'high' && score > 0) score += 15;
+    if (vol === 'high' && score < 0) score -= 15;
+
+    return Math.max(-100, Math.min(100, score));
+  }
+
+  // ── Estimated trade duration based on ATR and current momentum ────────────
+  // Returns estimated minutes to TP or SL based on average 1m move size
+  static estimateTradeDuration(atr1h, atr1m, slMult = 1.5) {
+    if (atr1m <= 0) return { minTarget: 5, maxTarget: 45 };
+    // SL distance in 1m ATR terms
+    const slIn1mAtr  = (atr1h * slMult) / atr1m;
+    const tpIn1mAtr  = slIn1mAtr * 2;   // 2R TP
+    // Average move per minute roughly = atr1m * 0.4 (smoothed for realistic exits)
+    const minsToTP   = Math.round(tpIn1mAtr / 0.4);
+    const minsToSL   = Math.round(slIn1mAtr / 0.4);
+    // Clamp to 1-45 min target range
+    return {
+      minTarget: Math.max(1, Math.min(45, Math.floor(minsToTP * 0.6))),
+      maxTarget: Math.min(45, Math.ceil(minsToTP * 1.4)),
+      slMins:    Math.max(1, Math.min(45, minsToSL)),
+    };
+  }
+
+  // ── Reversal Pattern Detection ─────────────────────────────────────────────
+
+  // Engulfing candle — current bar's body completely swallows previous bar's body
+  // Returns 'bullish' | 'bearish' | 'none'
+  static engulfing(candles) {
+    if (candles.length < 2) return 'none';
+    const prev = candles[candles.length - 2];
+    const curr = candles[candles.length - 1];
+    const prevBody = Math.abs(prev.close - prev.open);
+    const currBody = Math.abs(curr.close - curr.open);
+    if (prevBody === 0 || currBody === 0) return 'none';
+    // Bullish: previous bar bearish, current bar bullish and engulfs
+    if (prev.close < prev.open && curr.close > curr.open &&
+        curr.open  <= prev.close && curr.close >= prev.open) {
+      return 'bullish';
+    }
+    // Bearish: previous bar bullish, current bar bearish and engulfs
+    if (prev.close > prev.open && curr.close < curr.open &&
+        curr.open  >= prev.close && curr.close <= prev.open) {
+      return 'bearish';
+    }
+    return 'none';
+  }
+
+  // Pin bar — hammer (bullish) or shooting star (bearish)
+  // Returns 'bullish' | 'bearish' | 'none'
+  static pinBar(candles) {
+    if (candles.length < 1) return 'none';
+    const c     = candles[candles.length - 1];
+    const body  = Math.abs(c.close - c.open);
+    const range = c.high - c.low;
+    if (range === 0) return 'none';
+    const bodyTop    = Math.max(c.open, c.close);
+    const bodyBottom = Math.min(c.open, c.close);
+    const upperWick  = c.high - bodyTop;
+    const lowerWick  = bodyBottom - c.low;
+    const bodyRatio  = body / range;
+    // Hammer (bullish): small body, long lower wick (≥2× body), small upper wick
+    if (bodyRatio < 0.35 && lowerWick >= body * 2.0 && upperWick <= body * 0.6) {
+      return 'bullish';
+    }
+    // Shooting star (bearish): small body, long upper wick (≥2× body), small lower wick
+    if (bodyRatio < 0.35 && upperWick >= body * 2.0 && lowerWick <= body * 0.6) {
+      return 'bearish';
+    }
+    return 'none';
+  }
+
+  // Doji — body is <10% of total range (indecision candle)
+  static isDoji(candles) {
+    if (candles.length < 1) return false;
+    const c     = candles[candles.length - 1];
+    const body  = Math.abs(c.close - c.open);
+    const range = c.high - c.low;
+    if (range === 0) return true;
+    return body / range < 0.10;
+  }
+
+  // RSI divergence — price makes a new extreme but RSI does not confirm it
+  // Returns 'bullish' | 'bearish' | 'none'
+  static rsiDivergence(candles, lookback = 25) {
+    if (candles.length < lookback + 5) return 'none';
+    const slice  = candles.slice(-lookback);
+    const closes = slice.map(c => c.close);
+
+    // Build rolling RSI series using period 9 (faster response on 5m)
+    const rsiSeries = [];
+    for (let i = 10; i <= closes.length; i++) {
+      rsiSeries.push(this.rsi(closes.slice(0, i), 9));
+    }
+    if (rsiSeries.length < 10) return 'none';
+
+    const recentRsi   = rsiSeries[rsiSeries.length - 1];
+
+    // Bullish divergence: price made lower low in recent 5 bars vs prior 10–20 bars,
+    // but RSI is higher → momentum is recovering
+    const priceLowNew = Math.min(...closes.slice(-5));
+    const priceLowOld = Math.min(...closes.slice(-20, -5));
+    const rsiLowNew   = Math.min(...rsiSeries.slice(-5));
+    const rsiLowOld   = Math.min(...rsiSeries.slice(-20, -5));
+    if (priceLowNew < priceLowOld * 0.9999 && rsiLowNew > rsiLowOld + 2 && recentRsi < 52) {
+      return 'bullish';
+    }
+
+    // Bearish divergence: price made higher high in recent 5 bars vs prior 10–20 bars,
+    // but RSI is lower → momentum is fading
+    const priceHighNew = Math.max(...closes.slice(-5));
+    const priceHighOld = Math.max(...closes.slice(-20, -5));
+    const rsiHighNew   = Math.max(...rsiSeries.slice(-5));
+    const rsiHighOld   = Math.max(...rsiSeries.slice(-20, -5));
+    if (priceHighNew > priceHighOld * 1.0001 && rsiHighNew < rsiHighOld - 2 && recentRsi > 48) {
+      return 'bearish';
+    }
+
+    return 'none';
+  }
+
+  // Double top / double bottom — two swing highs/lows within 0.5 ATR, price now reversing
+  // Returns 'bullish' (double bottom) | 'bearish' (double top) | 'none'
+  static doubleTopBottom(candles, atr) {
+    if (candles.length < 30 || atr <= 0) return 'none';
+    const slice   = candles.slice(-40);
+    const current = slice[slice.length - 1].close;
+
+    // Collect swing highs and lows (simple: bar higher/lower than 2 neighbours each side)
+    const swingH = [], swingL = [];
+    for (let i = 2; i < slice.length - 2; i++) {
+      const { high, low } = slice[i];
+      if (high > slice[i-1].high && high > slice[i-2].high &&
+          high > slice[i+1].high && high > slice[i+2].high) swingH.push(high);
+      if (low  < slice[i-1].low  && low  < slice[i-2].low  &&
+          low  < slice[i+1].low  && low  < slice[i+2].low)  swingL.push(low);
+    }
+
+    // Double top: two highs within 0.5 ATR, current price declining from second peak
+    if (swingH.length >= 2) {
+      const h1 = swingH[swingH.length - 2], h2 = swingH[swingH.length - 1];
+      if (Math.abs(h1 - h2) < atr * 0.5 && current < h2 - atr * 0.25) return 'bearish';
+    }
+    // Double bottom: two lows within 0.5 ATR, current price rising from second trough
+    if (swingL.length >= 2) {
+      const l1 = swingL[swingL.length - 2], l2 = swingL[swingL.length - 1];
+      if (Math.abs(l1 - l2) < atr * 0.5 && current > l2 + atr * 0.25) return 'bullish';
+    }
+    return 'none';
+  }
+
+  // Bollinger Band squeeze — current band width < 70% of band width 20 bars ago
+  static bbSqueeze(closes) {
+    if (closes.length < 45) return false;
+    const bb1 = this.bollinger(closes, 20);
+    const bb2 = this.bollinger(closes.slice(0, -20), 20);
+    if (!bb1 || !bb2 || bb2.mid === 0) return false;
+    const widthNow  = (bb1.upper - bb1.lower) / bb1.mid;
+    const widthPrev = (bb2.upper - bb2.lower) / bb2.mid;
+    return widthNow < widthPrev * 0.7;
+  }
+
+  // Short-term trend from 1H context candles (works with as few as 10 bars)
+  static shortTrend(candles1H) {
+    if (!candles1H || candles1H.length < 10) return null;
+    const closes = candles1H.map(c => c.close);
+    const p9  = Math.min(9,  closes.length - 1);
+    const p21 = Math.min(21, closes.length - 1);
+    const e9  = this.ema(closes, p9);
+    const e21 = this.ema(closes, p21);
+    if (!e9.length || !e21.length) return null;
+    const cur = closes[closes.length - 1];
+    if (cur > e9[e9.length-1] && e9[e9.length-1] > e21[e21.length-1]) return 'bullish';
+    if (cur < e9[e9.length-1] && e9[e9.length-1] < e21[e21.length-1]) return 'bearish';
     return 'neutral';
   }
 }
@@ -168,18 +351,30 @@ class TechnicalAnalysis {
 // ── Signal Generator ──────────────────────────────────────────────────────────
 class SignalEngine {
   constructor() {
-    this.lastSignals = {};  // symbol -> { direction, ts }
-    // Max possible indicator score — used for absolute confidence scaling.
+    this.lastSignals = {};   // symbol -> { direction, ts }
+    // Max possible raw score before brain bonuses.
     // EMA(30) + 200EMA(5) + RSI(20) + MACD(20) + BB(10) + Stoch(5) + Volume(10)
-    // + Levels(5) + 4H alignment(8) = 113 pts max
-    this.MAX_SCORE = 113;
+    // + Levels(5) + HTF(8) + Engulfing(25) + PinBar(20) + RSIDiv(15) + DblTop(15)
+    // + Doji@BB(10) = 198 pts max (brain bonuses are additive on top)
+    this.MAX_SCORE = 198;
   }
 
-  async generateSignal(symbol, candles, candles4H = null) {
+  // ── Core signal generator: 1m primary, 5m context, brain-weighted ──────────
+  // options.timeframe: '1m' (default) | '5m' (fallback if 1m unavailable)
+  async generateSignal(symbol, candles, candlesCtx = null, options = {}) {
     if (!candles || candles.length < 50) return null;
 
     const closes  = candles.map(c => c.close);
     const current = closes[closes.length - 1];
+
+    // Brain weight getter — multiplies each indicator's point contribution
+    // by its observed win-rate factor (0.3×–2.0×). Defaults to 1.0 if no data yet.
+    const w = (feature) => window.brain?.getWeight(feature) ?? 1.0;
+
+    // Feature tracking — we collect which indicators fired in the winning direction
+    // so the brain can learn which combos actually work.
+    const bullFeatures = [];
+    const bearFeatures = [];
 
     // ── Compute indicators ─────────────────────────────────────────────────
     const ema9     = TechnicalAnalysis.ema(closes, 9);
@@ -194,131 +389,304 @@ class SignalEngine {
     const vol      = TechnicalAnalysis.volumeSignal(candles);
     const levels   = TechnicalAnalysis.keyLevels(candles);
     const volReg   = TechnicalAnalysis.volatilityRegime(candles);
-    const trend4H  = TechnicalAnalysis.macroTrend(candles4H);
 
-    const e9   = ema9.length  > 0 ? ema9[ema9.length - 1]   : current;
-    const e21  = ema21.length > 0 ? ema21[ema21.length - 1]  : current;
-    const e50  = ema50.length > 0 ? ema50[ema50.length - 1]  : current;
+    const e9   = ema9.length   > 0 ? ema9[ema9.length - 1]     : current;
+    const e21  = ema21.length  > 0 ? ema21[ema21.length - 1]   : current;
+    const e50  = ema50.length  > 0 ? ema50[ema50.length - 1]   : current;
     const e200 = ema200.length > 0 ? ema200[ema200.length - 1] : null;
 
-    // ── Scoring system ─────────────────────────────────────────────────────
-    // IMPORTANT: confidence = max(bullScore, bearScore) / MAX_SCORE * 100
-    // This means a signal needs high ABSOLUTE score to pass the threshold —
-    // not just directional dominance (which was the old broken formula).
-    let bullScore = 0;
-    let bearScore = 0;
+    // ── Scoring: every component multiplied by its brain weight ────────────
+    let bullScore = 0, bearScore = 0;
     const reasons = [];
 
-    // EMA stack alignment (max 30 pts)
+    // ── EMA stack (max 30 pts × weight) ───────────────────────────────────
     if (current > e9 && e9 > e21 && e21 > e50) {
-      bullScore += 30; reasons.push('EMA stack fully bullish (9 > 21 > 50)');
+      const pts = Math.round(30 * w('ema_stack_full_bull'));
+      bullScore += pts; bullFeatures.push('ema_stack_full_bull');
+      reasons.push('EMA stack fully bullish (9 > 21 > 50)');
     } else if (current < e9 && e9 < e21 && e21 < e50) {
-      bearScore += 30; reasons.push('EMA stack fully bearish (9 < 21 < 50)');
+      const pts = Math.round(30 * w('ema_stack_full_bear'));
+      bearScore += pts; bearFeatures.push('ema_stack_full_bear');
+      reasons.push('EMA stack fully bearish (9 < 21 < 50)');
     } else if (current > e21 && e21 > e50) {
-      bullScore += 18; reasons.push('Trend up: price above 21 EMA above 50 EMA');
+      const pts = Math.round(18 * w('ema_stack_partial_bull'));
+      bullScore += pts; bullFeatures.push('ema_stack_partial_bull');
+      reasons.push('Trend up: price above 21 EMA above 50 EMA');
     } else if (current < e21 && e21 < e50) {
-      bearScore += 18; reasons.push('Trend down: price below 21 EMA below 50 EMA');
+      const pts = Math.round(18 * w('ema_stack_partial_bear'));
+      bearScore += pts; bearFeatures.push('ema_stack_partial_bear');
+      reasons.push('Trend down: price below 21 EMA below 50 EMA');
     } else if (e9 > e21) {
-      bullScore += 10; reasons.push('Short-term momentum bullish (9 EMA > 21 EMA)');
+      const pts = Math.round(10 * w('ema_9_21_bull'));
+      bullScore += pts; bullFeatures.push('ema_9_21_bull');
+      reasons.push('Short-term momentum bullish (9 EMA > 21 EMA)');
     } else {
-      bearScore += 10; reasons.push('Short-term momentum bearish (9 EMA < 21 EMA)');
+      const pts = Math.round(10 * w('ema_9_21_bear'));
+      bearScore += pts; bearFeatures.push('ema_9_21_bear');
+      reasons.push('Short-term momentum bearish (9 EMA < 21 EMA)');
     }
 
-    // 200 EMA trend bias (max 5 pts) — only score if EMA is valid (needs 200 candles)
+    // ── 200 EMA bias (max 5 pts) ──────────────────────────────────────────
     if (e200 !== null && ema200.length >= 50) {
-      if (current > e200) { bullScore += 5; reasons.push('Price above 200 EMA — long-term uptrend'); }
-      else                { bearScore += 5; reasons.push('Price below 200 EMA — long-term downtrend'); }
+      if (current > e200) {
+        const pts = Math.round(5 * w('ema200_above'));
+        bullScore += pts; bullFeatures.push('ema200_above');
+        reasons.push('Price above 200 EMA — long-term uptrend');
+      } else {
+        const pts = Math.round(5 * w('ema200_below'));
+        bearScore += pts; bearFeatures.push('ema200_below');
+        reasons.push('Price below 200 EMA — long-term downtrend');
+      }
     }
 
-    // RSI (max 20 pts)
+    // ── RSI (max 20 pts) ──────────────────────────────────────────────────
     if (rsi < 30) {
-      bullScore += 20; reasons.push(`RSI oversold at ${rsi.toFixed(1)} — elevated reversal probability`);
+      const pts = Math.round(20 * w('rsi_oversold'));
+      bullScore += pts; bullFeatures.push('rsi_oversold');
+      reasons.push(`RSI oversold at ${rsi.toFixed(1)} — elevated reversal probability`);
     } else if (rsi > 70) {
-      bearScore += 20; reasons.push(`RSI overbought at ${rsi.toFixed(1)} — elevated pullback probability`);
+      const pts = Math.round(20 * w('rsi_overbought'));
+      bearScore += pts; bearFeatures.push('rsi_overbought');
+      reasons.push(`RSI overbought at ${rsi.toFixed(1)} — elevated pullback probability`);
     } else if (rsi > 50 && rsi < 70) {
-      bullScore += 10; reasons.push(`RSI bullish zone (${rsi.toFixed(1)})`);
+      const pts = Math.round(10 * w('rsi_bullzone'));
+      bullScore += pts; bullFeatures.push('rsi_bullzone');
+      reasons.push(`RSI bullish zone (${rsi.toFixed(1)})`);
     } else if (rsi < 50 && rsi > 30) {
-      bearScore += 10; reasons.push(`RSI bearish zone (${rsi.toFixed(1)})`);
+      const pts = Math.round(10 * w('rsi_bearzone'));
+      bearScore += pts; bearFeatures.push('rsi_bearzone');
+      reasons.push(`RSI bearish zone (${rsi.toFixed(1)})`);
     }
 
-    // MACD (max 20 pts)
+    // ── MACD (max 20 pts) ─────────────────────────────────────────────────
     if (macdData.bullish) {
-      bullScore += 20; reasons.push('MACD histogram expanding bullish — momentum accelerating up');
+      const pts = Math.round(20 * w('macd_expand_bull'));
+      bullScore += pts; bullFeatures.push('macd_expand_bull');
+      reasons.push('MACD histogram expanding bullish — momentum accelerating up');
     } else if (macdData.bearish) {
-      bearScore += 20; reasons.push('MACD histogram expanding bearish — momentum accelerating down');
+      const pts = Math.round(20 * w('macd_expand_bear'));
+      bearScore += pts; bearFeatures.push('macd_expand_bear');
+      reasons.push('MACD histogram expanding bearish — momentum accelerating down');
     } else if (macdData.macd > 0) {
-      bullScore += 8; reasons.push('MACD positive territory');
+      const pts = Math.round(8 * w('macd_pos'));
+      bullScore += pts; bullFeatures.push('macd_pos');
+      reasons.push('MACD positive territory');
     } else {
-      bearScore += 8; reasons.push('MACD negative territory');
+      const pts = Math.round(8 * w('macd_neg'));
+      bearScore += pts; bearFeatures.push('macd_neg');
+      reasons.push('MACD negative territory');
     }
 
-    // Bollinger Bands (max 10 pts)
+    // ── Bollinger Bands (max 10 pts) ──────────────────────────────────────
     if (bb) {
       if (current < bb.lower) {
-        bullScore += 10; reasons.push('Price at lower Bollinger Band — mean reversion setup');
+        const pts = Math.round(10 * w('bb_at_lower'));
+        bullScore += pts; bullFeatures.push('bb_at_lower');
+        reasons.push('Price at lower Bollinger Band — mean reversion setup');
       } else if (current > bb.upper) {
-        bearScore += 10; reasons.push('Price at upper Bollinger Band — mean reversion setup');
+        const pts = Math.round(10 * w('bb_at_upper'));
+        bearScore += pts; bearFeatures.push('bb_at_upper');
+        reasons.push('Price at upper Bollinger Band — mean reversion setup');
       } else if (current > bb.mid) {
-        bullScore += 4; reasons.push('Price above Bollinger midline');
+        const pts = Math.round(4 * w('bb_above_mid'));
+        bullScore += pts; bullFeatures.push('bb_above_mid');
+        reasons.push('Price above Bollinger midline');
       } else {
-        bearScore += 4; reasons.push('Price below Bollinger midline');
+        const pts = Math.round(4 * w('bb_below_mid'));
+        bearScore += pts; bearFeatures.push('bb_below_mid');
+        reasons.push('Price below Bollinger midline');
       }
     }
 
-    // Stochastic (max 5 pts)
+    // ── Stochastic (max 5 pts) ────────────────────────────────────────────
     if (stoch < 20) {
-      bullScore += 5; reasons.push(`Stochastic oversold (${stoch.toFixed(1)})`);
+      const pts = Math.round(5 * w('stoch_oversold'));
+      bullScore += pts; bullFeatures.push('stoch_oversold');
+      reasons.push(`Stochastic oversold (${stoch.toFixed(1)})`);
     } else if (stoch > 80) {
-      bearScore += 5; reasons.push(`Stochastic overbought (${stoch.toFixed(1)})`);
+      const pts = Math.round(5 * w('stoch_overbought'));
+      bearScore += pts; bearFeatures.push('stoch_overbought');
+      reasons.push(`Stochastic overbought (${stoch.toFixed(1)})`);
     }
 
-    // Volume confirmation (max 10 pts)
+    // ── Volume (max 10 pts) ───────────────────────────────────────────────
     if (vol === 'high') {
-      if (bullScore > bearScore) { bullScore += 10; reasons.push('Above-average volume confirms bullish move'); }
-      else                       { bearScore += 10; reasons.push('Above-average volume confirms bearish move'); }
+      if (bullScore >= bearScore) {
+        const pts = Math.round(10 * w('volume_high'));
+        bullScore += pts; bullFeatures.push('volume_high');
+        reasons.push('Above-average volume confirms bullish move');
+      } else {
+        const pts = Math.round(10 * w('volume_high'));
+        bearScore += pts; bearFeatures.push('volume_high');
+        reasons.push('Above-average volume confirms bearish move');
+      }
     } else if (vol === 'low') {
-      reasons.push('Low volume — wait for confirmation before entering');
+      reasons.push('Low volume — wait for confirmation');
     }
 
-    // Key level proximity (max 5 pts) — uses real swing pivots
+    // ── Key levels (max 5 pts) ────────────────────────────────────────────
     if (atr > 0) {
-      const distToSupport    = Math.abs(current - levels.support)    / atr;
-      const distToResistance = Math.abs(current - levels.resistance) / atr;
-      if (distToSupport < 1.5 && current >= levels.support) {
-        bullScore += 5; reasons.push(`Near swing support at ${levels.support.toFixed(4)}`);
-      } else if (distToResistance < 1.5 && current <= levels.resistance) {
-        bearScore += 5; reasons.push(`Near swing resistance at ${levels.resistance.toFixed(4)}`);
+      const distS = Math.abs(current - levels.support)    / atr;
+      const distR = Math.abs(current - levels.resistance) / atr;
+      if (distS < 1.5 && current >= levels.support) {
+        const pts = Math.round(5 * w('near_support'));
+        bullScore += pts; bullFeatures.push('near_support');
+        reasons.push(`Near swing support at ${levels.support.toFixed(4)}`);
+      } else if (distR < 1.5 && current <= levels.resistance) {
+        const pts = Math.round(5 * w('near_resistance'));
+        bearScore += pts; bearFeatures.push('near_resistance');
+        reasons.push(`Near swing resistance at ${levels.resistance.toFixed(4)}`);
       }
     }
 
-    // 4H macro trend alignment bonus (max 8 pts) — cross-timeframe confluence
-    if (trend4H) {
-      if (trend4H === 'bullish' && bullScore >= bearScore) {
-        bullScore += 8; reasons.push('4H trend aligned bullish — multi-timeframe confluence');
-      } else if (trend4H === 'bearish' && bearScore > bullScore) {
-        bearScore += 8; reasons.push('4H trend aligned bearish — multi-timeframe confluence');
-      } else if (trend4H !== 'neutral') {
-        // Counter-trend warning (reduces nothing but noted)
-        reasons.push(`Counter-trend to 4H — signal goes against ${trend4H} macro trend`);
+    // ── Higher-timeframe trend alignment (max 8 pts) ───────────────────────
+    // 1m signals: candlesCtx holds 5m bars  → shortTrend (EMA9/21 on 5m)
+    // 5m signals: candlesCtx holds 1H bars  → shortTrend (EMA9/21 on 1H)
+    const is1m     = options.timeframe === '1m';
+    const is5m     = options.timeframe === '5m';
+    const htfTrend = TechnicalAnalysis.shortTrend(candlesCtx);
+    const htfLabel = is1m ? '5m' : (is5m ? '1H' : '4H');
+
+    if (htfTrend) {
+      if (htfTrend === 'bullish' && bullScore >= bearScore) {
+        const pts = Math.round(8 * w('htf_bull'));
+        bullScore += pts; bullFeatures.push('htf_bull');
+        reasons.push(`${htfLabel} trend aligned bullish — multi-timeframe confluence`);
+      } else if (htfTrend === 'bearish' && bearScore > bullScore) {
+        const pts = Math.round(8 * w('htf_bear'));
+        bearScore += pts; bearFeatures.push('htf_bear');
+        reasons.push(`${htfLabel} trend aligned bearish — multi-timeframe confluence`);
+      } else if (htfTrend !== 'neutral') {
+        reasons.push(`Counter-trend to ${htfLabel} — reversal signal against ${htfTrend} bias`);
       }
     }
 
-    // ── Final signal decision ─────────────────────────────────────────────
-    // FIXED: confidence = absolute score vs max possible (not directional ratio).
-    // Old formula gave 100% confidence for any 1-indicator signal.
-    const winScore   = Math.max(bullScore, bearScore);
-    const confidence = Math.round((winScore / this.MAX_SCORE) * 100);
-    if (confidence < 58) return null;  // Minimum absolute strength threshold
+    // ── Reversal Patterns ──────────────────────────────────────────────────
+    // Engulfing (25 pts) — strongest two-bar reversal signal
+    const engulf = TechnicalAnalysis.engulfing(candles.slice(-3));
+    if (engulf === 'bullish') {
+      const pts = Math.round(25 * w('engulfing_bull'));
+      bullScore += pts; bullFeatures.push('engulfing_bull');
+      reasons.push('Bullish engulfing candle — buyers overwhelmed sellers decisively');
+    } else if (engulf === 'bearish') {
+      const pts = Math.round(25 * w('engulfing_bear'));
+      bearScore += pts; bearFeatures.push('engulfing_bear');
+      reasons.push('Bearish engulfing candle — sellers overwhelmed buyers decisively');
+    }
 
+    // Pin bar (20 pts) — hammer or shooting star rejection
+    const pin = TechnicalAnalysis.pinBar(candles.slice(-2));
+    if (pin === 'bullish') {
+      const pts = Math.round(20 * w('pin_bar_bull'));
+      bullScore += pts; bullFeatures.push('pin_bar_bull');
+      reasons.push('Hammer pin bar — strong lower-wick rejection of bearish pressure');
+    } else if (pin === 'bearish') {
+      const pts = Math.round(20 * w('pin_bar_bear'));
+      bearScore += pts; bearFeatures.push('pin_bar_bear');
+      reasons.push('Shooting star — strong upper-wick rejection of bullish pressure');
+    }
+
+    // RSI divergence (15 pts) — momentum leading price reversal
+    const div = TechnicalAnalysis.rsiDivergence(candles, 25);
+    if (div === 'bullish') {
+      const pts = Math.round(15 * w('rsi_div_bull'));
+      bullScore += pts; bullFeatures.push('rsi_div_bull');
+      reasons.push('Bullish RSI divergence — momentum recovering while price still weak');
+    } else if (div === 'bearish') {
+      const pts = Math.round(15 * w('rsi_div_bear'));
+      bearScore += pts; bearFeatures.push('rsi_div_bear');
+      reasons.push('Bearish RSI divergence — momentum fading while price still elevated');
+    }
+
+    // Double top / bottom (15 pts) — structural reversal
+    const dbl = TechnicalAnalysis.doubleTopBottom(candles, atr);
+    if (dbl === 'bullish') {
+      const pts = Math.round(15 * w('double_bottom'));
+      bullScore += pts; bullFeatures.push('double_bottom');
+      reasons.push('Double bottom — price tested support twice and is now bouncing');
+    } else if (dbl === 'bearish') {
+      const pts = Math.round(15 * w('double_top'));
+      bearScore += pts; bearFeatures.push('double_top');
+      reasons.push('Double top — price failed at resistance twice and is now reversing');
+    }
+
+    // Doji at BB extreme (10 pts) — indecision at a stretched level
+    if (TechnicalAnalysis.isDoji(candles.slice(-1)) && bb) {
+      if (current <= bb.lower + (bb.mid - bb.lower) * 0.1) {
+        const pts = Math.round(10 * w('doji_at_bb_lower'));
+        bullScore += pts; bullFeatures.push('doji_at_bb_lower');
+        reasons.push('Doji at lower Bollinger Band — indecision after oversold stretch');
+      } else if (current >= bb.upper - (bb.upper - bb.mid) * 0.1) {
+        const pts = Math.round(10 * w('doji_at_bb_upper'));
+        bearScore += pts; bearFeatures.push('doji_at_bb_upper');
+        reasons.push('Doji at upper Bollinger Band — indecision after overbought stretch');
+      }
+    }
+
+    // BB squeeze (annotation only — brain learns this as a context feature)
+    const squeeze = TechnicalAnalysis.bbSqueeze(closes);
+    if (squeeze) {
+      reasons.push('Bollinger Band squeeze — volatility contraction, breakout imminent');
+      // Add to both feature lists so brain learns which direction squeezes resolve
+      bullFeatures.push('bb_squeeze'); bearFeatures.push('bb_squeeze');
+    }
+
+    // ── Brain bonuses (applied after all manual indicators) ────────────────
+    // Determine preliminary direction before applying bonuses
+    const prelim      = bullScore >= bearScore ? 'BUY' : 'SELL';
+    const activeFeats = prelim === 'BUY' ? bullFeatures : bearFeatures;
+
+    const confBonus = window.brain?.getConfluenceBonus(activeFeats) ?? 0;
+    const comboBonus = window.brain?.getComboBonus(activeFeats) ?? 0;
+    const fpResult   = window.brain?.getFingerprintBonus(candles, atr) ?? { bonus: 0, fp: '?' };
+    const brainBonus = confBonus + comboBonus + fpResult.bonus;
+
+    if (prelim === 'BUY') bullScore += brainBonus;
+    else                  bearScore += brainBonus;
+
+    // Log brain contribution for debugging
+    if (brainBonus !== 0) {
+      console.debug(`Brain bonus for ${symbol}: conf=${confBonus} combo=${comboBonus} fp=${fpResult.bonus} total=${brainBonus}`);
+    }
+
+    // ── Final decision ─────────────────────────────────────────────────────
+    const winScore  = Math.max(bullScore, bearScore);
     const direction = bullScore > bearScore ? 'BUY' : 'SELL';
+    const features  = direction === 'BUY' ? bullFeatures : bearFeatures;
 
-    // ── ATR-adaptive SL/TP ────────────────────────────────────────────────
-    // High volatility: tighter multiplier (price moves more, SL must be wider
-    // relative to tick, so we actually slightly widen). Low vol: standard.
-    // Result: TP1 = 2.5x, TP2 = 4x gives 1.67:1 and 2.67:1 R:R.
-    const slMult  = volReg === 'high' ? 1.8  : 1.5;
-    const tp1Mult = volReg === 'high' ? 2.8  : 2.5;
-    const tp2Mult = volReg === 'high' ? 4.5  : 4.0;
+    // Learning engine manual adjustment (from WIN/LOSS buttons in journal)
+    const learnAdj   = window.learningEngine?.getAdjustment(symbol, direction) || 0;
+    const baseConf   = Math.round((winScore / this.MAX_SCORE) * 100);
+    const confidence = Math.max(0, Math.min(100, baseConf + learnAdj));
+
+    // Minimum threshold — 1m requires fewer indicators (less history) so threshold is 50%
+    const minConf = is1m ? 50 : 55;
+    if (confidence < minConf) return null;
+
+    // ── ATR-adaptive SL/TP (tighter for 1m scalp trades) ──────────────────
+    // 1m: SL 1.2× ATR → TP1 2.0× → targets hit in 3–15 min
+    // 5m: SL 1.3× ATR → TP1 2.2× → targets hit in 5–25 min
+    // 1H: SL 1.5× ATR → TP1 2.5× → targets hit in hours
+    let slMult, tp1Mult, tp2Mult, timingHint, dedupMs;
+    if (is1m) {
+      slMult  = volReg === 'high' ? 1.4  : 1.2;
+      tp1Mult = volReg === 'high' ? 2.3  : 2.0;
+      tp2Mult = volReg === 'high' ? 3.8  : 3.2;
+      timingHint = '3–15 min';
+      dedupMs    = 5 * 60 * 1000;
+    } else if (is5m) {
+      slMult  = volReg === 'high' ? 1.6  : 1.3;
+      tp1Mult = volReg === 'high' ? 2.6  : 2.2;
+      tp2Mult = volReg === 'high' ? 4.0  : 3.5;
+      timingHint = '5–25 min';
+      dedupMs    = 15 * 60 * 1000;
+    } else {
+      slMult  = volReg === 'high' ? 1.8  : 1.5;
+      tp1Mult = volReg === 'high' ? 2.8  : 2.5;
+      tp2Mult = volReg === 'high' ? 4.5  : 4.0;
+      timingHint = '15–60 min';
+      dedupMs    = 45 * 60 * 1000;
+    }
 
     let entry, sl, tp1, tp2;
     if (direction === 'BUY') {
@@ -333,75 +701,93 @@ class SignalEngine {
       tp2   = entry - atr * tp2Mult;
     }
 
-    const rrRatio = (tp1Mult / slMult).toFixed(2);
+    // ── Pattern chip labels ────────────────────────────────────────────────
+    const patterns = [];
+    if (engulf !== 'none')   patterns.push(engulf === 'bullish' ? 'Engulfing ▲' : 'Engulfing ▼');
+    if (pin    !== 'none')   patterns.push(pin    === 'bullish' ? 'Hammer'       : 'Shooting Star');
+    if (div    !== 'none')   patterns.push(div    === 'bullish' ? 'RSI Div ▲'    : 'RSI Div ▼');
+    if (dbl    !== 'none')   patterns.push(dbl    === 'bullish' ? 'Dbl Bottom'   : 'Dbl Top');
+    if (squeeze)             patterns.push('BB Squeeze');
 
-    // ── Signal object ─────────────────────────────────────────────────────
-    // ID is stable (symbol+direction, not timestamp) for proper AI cache hits.
+    // ── Signal object ──────────────────────────────────────────────────────
+    const timeframeLabel = is1m ? '1m' : (is5m ? '5m' : '1H');
     const signal = {
-      id:         `${symbol}-${direction}`,
+      id:          `${symbol}-${direction}`,
+      uid:         `${symbol}-${direction}-${Date.now()}`,
       symbol,
-      display:    window.INSTRUMENTS?.[symbol]?.display || symbol,
+      display:     window.INSTRUMENTS?.[symbol]?.display || symbol,
       direction,
       confidence,
-      entry:      parseFloat(entry.toFixed(5)),
-      sl:         parseFloat(sl.toFixed(5)),
-      tp1:        parseFloat(tp1.toFixed(5)),
-      tp2:        parseFloat(tp2.toFixed(5)),
-      rrRatio,
-      atr:        parseFloat(atr.toFixed(5)),
-      rsi:        parseFloat(rsi.toFixed(1)),
-      stoch:      parseFloat(stoch.toFixed(1)),
-      macd:       macdData,
-      volume:     vol,
-      volRegime:  volReg,
-      trend4H:    trend4H || 'none',
-      reasons:    reasons.slice(0, 6),
-      timestamp:  new Date(),
-      simulated:  candles[0]?.simulated || false,
-      timeframe:  '1H',
+      learnAdj:    learnAdj !== 0 ? learnAdj : undefined,
+      brainBonus:  brainBonus !== 0 ? brainBonus : undefined,
+      features,
+      fingerprint: fpResult.fp,
+      patterns:    patterns.length > 0 ? patterns : undefined,
+      entry:       parseFloat(entry.toFixed(5)),
+      sl:          parseFloat(sl.toFixed(5)),
+      tp1:         parseFloat(tp1.toFixed(5)),
+      tp2:         parseFloat(tp2.toFixed(5)),
+      rrRatio:     (tp1Mult / slMult).toFixed(2),
+      atr:         parseFloat(atr.toFixed(5)),
+      rsi:         parseFloat(rsi.toFixed(1)),
+      stoch:       parseFloat(stoch.toFixed(1)),
+      macd:        macdData,
+      volume:      vol,
+      volRegime:   volReg,
+      trend4H:     htfTrend || 'none',
+      reasons:     reasons.slice(0, 8),
+      timestamp:   new Date(),
+      simulated:   candles[0]?.simulated || false,
+      timeframe:   timeframeLabel,
+      timingHint,
     };
 
-    // ── Deduplicate (same direction on same symbol within 45 min) ─────────
+    // ── Deduplicate ────────────────────────────────────────────────────────
     const last = this.lastSignals[symbol];
-    if (last && last.direction === direction && Date.now() - last.ts < 45 * 60 * 1000) {
+    if (last && last.direction === direction && Date.now() - last.ts < dedupMs) {
       return { ...signal, refreshed: true };
     }
     this.lastSignals[symbol] = { direction, ts: Date.now() };
-
     return signal;
   }
 
-  // ── Batch scan all symbols — runs in PARALLEL for speed ───────────────────
-  // Fixed: was sequential for..of (30+ seconds). Now Promise.allSettled() (3-5s).
+  // ── Batch scan — crypto in parallel, forex/futures in small batches ────────
   async scanAll(symbols) {
-    const tasks = symbols.map(sym => this._scanOne(sym));
-    const settled = await Promise.allSettled(tasks);
-
     const results = [];
-    for (const outcome of settled) {
-      if (outcome.status === 'fulfilled' && outcome.value) {
-        results.push(outcome.value);
+    const cryptos = symbols.filter(s => window.INSTRUMENTS?.[s]?.type === 'crypto');
+    const others  = symbols.filter(s => window.INSTRUMENTS?.[s]?.type !== 'crypto');
+
+    const cryptoSettled = await Promise.allSettled(cryptos.map(s => this._scanOne(s)));
+    for (const o of cryptoSettled) {
+      if (o.status === 'fulfilled' && o.value) results.push(o.value);
+    }
+
+    const BATCH = 3;
+    for (let i = 0; i < others.length; i += BATCH) {
+      const batch   = others.slice(i, i + BATCH);
+      const settled = await Promise.allSettled(batch.map(s => this._scanOne(s)));
+      for (const o of settled) {
+        if (o.status === 'fulfilled' && o.value) results.push(o.value);
       }
+      if (i + BATCH < others.length) await new Promise(r => setTimeout(r, 600));
     }
 
     return results.sort((a, b) => b.confidence - a.confidence);
   }
 
+  // ── Scan one symbol: 1m primary + 5m context ──────────────────────────────
+  // 300 bars × 1m = 5 hours of 1m data — sufficient for all indicators.
+  // 5m context (aggregated from 1m) provides HTF trend confirmation.
   async _scanOne(sym) {
     try {
-      // Fetch 1H candles (220 for valid 200-EMA) and 4H candles in parallel
-      const [candles1H, candles4H] = await Promise.allSettled([
-        window.marketData.getCandles(sym, '1h', 220),
-        window.marketData.getCandles(sym, '4h', 60),
-      ]);
+      const candles1m = await window.marketData.getCandles(sym, '1m', 300);
+      if (!candles1m || candles1m.length < 50) return null;
 
-      const c1H = candles1H.status === 'fulfilled' ? candles1H.value : null;
-      const c4H = candles4H.status === 'fulfilled' ? candles4H.value : null;
+      // Aggregate 5m bars from 1m for higher-timeframe context (no extra API call)
+      const candles5m = window.marketData._aggregate1mto5m(candles1m, 60);
 
-      if (!c1H || c1H.length < 50) return null;
-
-      return await this.generateSignal(sym, c1H, c4H);
-    } catch (e) {
+      return await this.generateSignal(sym, candles1m, candles5m, { timeframe: '1m' });
+    } catch(e) {
       console.warn(`Signal scan failed for ${sym}:`, e.message);
       return null;
     }
@@ -410,111 +796,78 @@ class SignalEngine {
 
 // ── Risk Manager ──────────────────────────────────────────────────────────────
 class RiskManager {
-
-  /**
-   * Calculate position size such that a stop loss hit = riskAmount dollars.
-   * Uses instrument-specific tick value from the INSTRUMENTS map.
-   * Returns: lots (forex), contracts (futures), or coin units (crypto).
-   */
   calcPositionSize({ symbol, entry, sl, riskAmount }) {
     const inst = window.INSTRUMENTS?.[symbol];
     if (!inst || !entry || !sl || entry === sl || riskAmount <= 0) return 0;
-
     const slDistance = Math.abs(entry - sl);
 
     if (inst.type === 'forex') {
-      // Standard lot = 100,000 units.
-      // JPY pairs: pip = 0.01, $10/pip/lot for USD quote pairs.
-      // Gold (XAU/USD): pip = 0.01, $1/pip/lot.
-      // Cross pairs (non-USD quote): requires conversion — approximate with $10/pip for majors.
       const pips = slDistance / inst.pip;
-      let pipValue = 10;  // default $10/pip per standard lot (USD quote)
-      if (inst.quote === 'JPY') pipValue = 10;   // USD/JPY: 0.01 pip = $10/lot approx at ~150
-      if (symbol === 'XAUUSD') pipValue = 1;     // Gold: 0.01 pt = $1/lot
-      if (inst.quote === 'JPY' && !symbol.startsWith('USD')) pipValue = 7; // GBPJPY approx
+      let pipValue = 10;
+      if (inst.quote === 'JPY') pipValue = 10;
+      if (symbol === 'XAUUSD') pipValue = 1;
+      if (inst.quote === 'JPY' && !symbol.startsWith('USD')) pipValue = 7;
       const lots = riskAmount / (pips * pipValue);
       return parseFloat(Math.max(0.01, lots).toFixed(2));
 
     } else if (inst.type === 'futures') {
-      // Dollar risk per contract = (slDistance / tickSize) * tickValue
-      const tickSize        = inst.pip;
-      const tickVal         = inst.tickVal || 10;
-      const ticks           = slDistance / tickSize;
-      const riskPerContract = ticks * tickVal;
-      if (riskPerContract <= 0) return 0;
-      const contracts = riskAmount / riskPerContract;
-      // Floor to nearest contract — if even 1 contract exceeds risk, return 1 with a note
-      const floored = Math.floor(contracts);
-      return parseFloat(Math.max(1, floored).toFixed(0));
+      const tickSize = inst.pip;
+      const tickVal  = inst.tickVal || window.marketData.getTickVal(symbol) || 10;
+      const ticks    = slDistance / tickSize;
+      const risk     = ticks * tickVal;
+      if (risk <= 0) return 0;
+      return parseFloat(Math.max(1, Math.floor(riskAmount / risk)).toFixed(0));
 
     } else if (inst.type === 'crypto') {
       const size = riskAmount / slDistance;
       return parseFloat(Math.max(0.001, size).toFixed(4));
     }
-
     return 0;
   }
 
-  /**
-   * Validate a signal against the active prop firm challenge rules.
-   * Returns { valid: boolean, warnings: string[] }
-   */
   validateSignal(signal, challenge) {
     const warnings = [];
     let valid = true;
-
     if (!challenge) return { valid: true, warnings };
 
-    // Daily loss limit (forex firms only — Apex has no daily limit)
     if (!challenge.isTrailingFirm && challenge.dailyBreached) {
       valid = false;
       warnings.push('Daily loss limit reached — no more trades today');
     }
-
-    // Max drawdown proximity warnings
     if (challenge.drawdownProgress > 90) {
       valid = false;
-      warnings.push('Approaching max drawdown — trading suspended until balance recovers');
+      warnings.push('Approaching max drawdown — trading suspended');
     } else if (challenge.drawdownProgress > 75 && signal.confidence < 75) {
       warnings.push('Elevated drawdown — only take setups above 75% confidence');
     }
-
-    // Trailing DD firms (Apex, TopStep) — floor proximity and consistency checks
     if (challenge.isTrailingFirm) {
-      const preset       = challenge.apexAccount;
-      const trailingRoom = challenge.trailingRoomRemaining;
-      if (preset && trailingRoom < preset.trailingDrawdown * 0.15) {
+      const preset = challenge.apexAccount;
+      const room   = challenge.trailingRoomRemaining;
+      if (preset && room < preset.trailingDrawdown * 0.15) {
         valid = false;
-        warnings.push(`Only $${trailingRoom.toFixed(0)} trailing room — stop trading to protect the account`);
-      } else if (preset && trailingRoom < preset.trailingDrawdown * 0.30) {
-        warnings.push(`Only $${trailingRoom.toFixed(0)} trailing room — reduce size to minimum`);
+        warnings.push(`Only $${room.toFixed(0)} trailing room — stop trading`);
+      } else if (preset && room < preset.trailingDrawdown * 0.30) {
+        warnings.push(`Only $${room.toFixed(0)} trailing room — reduce size`);
       }
-
-      // Futures market hours (applies to all trailing/futures firms)
       if (window.marketData && !window.marketData.isFuturesMarketOpen()) {
         warnings.push('Futures market closed — CME Globex maintenance or weekend');
       }
     }
-
-    // Apex-only rules (consistency cap, EOD)
     if (challenge.firmKey === 'apex') {
       if (challenge.profitAmt > 0 && challenge.apexConsistencyPct > 80) {
         const maxAllowed = challenge.apexConsistencyMaxAllowed;
-        warnings.push(`Approaching 30% daily consistency cap — max $${maxAllowed.toFixed(0)} more today`);
+        warnings.push(`Approaching 30% daily consistency cap — max $${maxAllowed?.toFixed(0)} more today`);
       }
       if (challenge.eodMinutesRemaining !== null && challenge.eodMinutesRemaining <= 10) {
         warnings.push(`EOD in ${challenge.eodMinutesRemaining}m — close all positions by 4:59 PM ET`);
       }
     }
-
-    // 4H counter-trend warning (universal — applies to all firms)
     if (signal.trend4H && signal.trend4H !== 'none' && signal.trend4H !== 'neutral') {
       const signalDir = signal.direction === 'BUY' ? 'bullish' : 'bearish';
       if (signal.trend4H !== signalDir) {
         warnings.push(`Counter-trend to 4H ${signal.trend4H} bias — higher-risk setup`);
       }
     }
-
     return { valid, warnings };
   }
 }

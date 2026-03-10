@@ -2,15 +2,11 @@
   "name": "cnax-prop-signals",
   "version": "1.0.0",
   "description": "CNAX Prop Signals — AI-powered trading signals for prop firm challenges",
-  "author": "CNAX Software <hello@cnaxsoftware.com>",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "build": "electron-builder --mac --win"
   },
   "dependencies": {},
   "devDependencies": {
@@ -20,50 +16,19 @@
   "build": {
     "appId": "pro.cnaxsoftware.signals",
     "productName": "CNAX Prop Signals",
-    "copyright": "Copyright © 2024 CNAX Software",
-    "asar": true,
-    "directories": {
-      "output": "dist",
-      "buildResources": "build"
-    },
-    "files": [
-      "electron/**/*",
-      "src/**/*",
-      "package.json"
-    ],
+    "directories": { "output": "dist" },
+    "files": ["electron/**/*", "src/**/*"],
     "mac": {
       "category": "public.app-category.finance",
-      "icon": "src/assets/icon.png",
       "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] }
-      ],
-      "darkModeSupport": true
-    },
-    "dmg": {
-      "title": "CNAX Prop Signals",
-      "background": null,
-      "window": { "width": 540, "height": 380 },
-      "contents": [
-        { "x": 130, "y": 220, "type": "file" },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        { "target": "zip", "arch": ["arm64"] },
+        { "target": "dir", "arch": ["arm64"] }
       ]
     },
     "win": {
-      "icon": "src/assets/icon.png",
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        { "target": "portable", "arch": ["x64"] }
       ]
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
-      "deleteAppDataOnUninstall": false
-    },
-    "linux": {
-      "icon": "src/assets/icon.png",
-      "target": ["AppImage"],
-      "category": "Finance"
     }
   }
 }

@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const zlib = require('zlib');
 
 let mainWindow;
 
@@ -37,20 +38,53 @@ function createWindow() {
   Menu.setApplicationMenu(null);
 }
 
+// ── Decompress response stream based on Content-Encoding header ─────────────
+function decompressStream(res) {
+  const enc = (res.headers['content-encoding'] || '').toLowerCase();
+  if (enc === 'gzip')    return res.pipe(zlib.createGunzip());
+  if (enc === 'deflate') return res.pipe(zlib.createInflate());
+  if (enc === 'br')      return res.pipe(zlib.createBrotliDecompress());
+  return res; // identity / no compression
+}
+
 // ── IPC: Fetch market data from main process (avoids CORS) ─────────────────
 ipcMain.handle('fetch-url', async (event, url) => {
   return new Promise((resolve, reject) => {
-    const lib = url.startsWith('https') ? https : http;
-    const req = lib.get(url, { headers: { 'User-Agent': 'CNAX-Signals/1.0' } }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch { resolve(data); }
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+      'Origin': 'https://finance.yahoo.com',
+      'Referer': 'https://finance.yahoo.com/',
+    };
+
+    function doRequest(reqUrl, depth) {
+      if (depth > 3) return reject(new Error('Too many redirects'));
+      const lib = reqUrl.startsWith('https') ? https : http;
+      const req = lib.get(reqUrl, { headers }, (res) => {
+        // Follow redirects
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume(); // drain the response
+          return doRequest(res.headers.location, depth + 1);
+        }
+        // Decompress and collect response body
+        const stream = decompressStream(res);
+        const chunks = [];
+        stream.on('data', chunk => chunks.push(chunk));
+        stream.on('end', () => {
+          const body = Buffer.concat(chunks).toString('utf8');
+          try { resolve(JSON.parse(body)); }
+          catch { resolve(body); }
+        });
+        stream.on('error', reject);
       });
-    });
-    req.on('error', reject);
-    req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+    }
+
+    doRequest(url, 0);
   });
 });
 
@@ -70,12 +104,15 @@ ipcMain.handle('fetch-post', async (event, { url, body, headers }) => {
       },
     };
     const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
+      const stream = decompressStream(res);
+      const chunks = [];
+      stream.on('data', chunk => chunks.push(chunk));
+      stream.on('end', () => {
+        const data = Buffer.concat(chunks).toString('utf8');
         try { resolve(JSON.parse(data)); }
         catch { resolve(data); }
       });
+      stream.on('error', reject);
     });
     req.on('error', reject);
     req.setTimeout(20000, () => { req.destroy(); reject(new Error('Groq timeout')); });

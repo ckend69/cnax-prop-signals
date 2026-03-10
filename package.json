@@ -2,11 +2,15 @@
   "name": "cnax-prop-signals",
   "version": "1.0.0",
   "description": "CNAX Prop Signals — AI-powered trading signals for prop firm challenges",
+  "author": "CNAX Software <hello@cnaxsoftware.com>",
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder --mac --win"
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
   },
   "dependencies": {},
   "devDependencies": {
@@ -16,14 +20,50 @@
   "build": {
     "appId": "pro.cnaxsoftware.signals",
     "productName": "CNAX Prop Signals",
-    "directories": { "output": "dist" },
-    "files": ["electron/**/*", "src/**/*"],
+    "copyright": "Copyright © 2024 CNAX Software",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "package.json"
+    ],
     "mac": {
       "category": "public.app-category.finance",
-      "target": "dmg"
+      "icon": "src/assets/icon.png",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] }
+      ],
+      "darkModeSupport": true
+    },
+    "dmg": {
+      "title": "CNAX Prop Signals",
+      "background": null,
+      "window": { "width": 540, "height": 380 },
+      "contents": [
+        { "x": 130, "y": 220, "type": "file" },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     },
     "win": {
-      "target": "nsis"
+      "icon": "src/assets/icon.png",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "icon": "src/assets/icon.png",
+      "target": ["AppImage"],
+      "category": "Finance"
     }
   }
 }

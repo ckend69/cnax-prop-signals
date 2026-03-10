@@ -911,12 +911,17 @@ class SignalEngine {
       }
     }
 
-    // BB squeeze (annotation only — brain learns this as a context feature)
+    // BB squeeze (context annotation — brain learns directional squeeze resolution)
     const squeeze = TechnicalAnalysis.bbSqueeze(closes);
     if (squeeze) {
       reasons.push('Bollinger Band squeeze — volatility contraction, breakout imminent');
-      // Add to both feature lists so brain learns which direction squeezes resolve
-      bullFeatures.push('bb_squeeze'); bearFeatures.push('bb_squeeze');
+      // Only tag the currently leading direction so the brain can learn whether
+      // squeezes in that direction tend to resolve profitably or not.
+      if (bullScore >= bearScore) {
+        bullFeatures.push('bb_squeeze');
+      } else {
+        bearFeatures.push('bb_squeeze');
+      }
     }
 
     // ── TJR / Smart Money Concepts ─────────────────────────────────────────
@@ -1243,9 +1248,12 @@ class SignalEngine {
     // ── Deduplicate ────────────────────────────────────────────────────────
     const last = this.lastSignals[symbol];
     if (last && last.direction === direction && Date.now() - last.ts < dedupMs) {
-      return { ...signal, refreshed: true };
+      // If entry repriced by more than 0.5× ATR since last signal, treat as fresh
+      // so the trader sees and is notified about the updated entry price.
+      const repriced = last.entry != null && Math.abs(entry - last.entry) > atr * 0.5;
+      if (!repriced) return { ...signal, refreshed: true };
     }
-    this.lastSignals[symbol] = { direction, ts: Date.now() };
+    this.lastSignals[symbol] = { direction, ts: Date.now(), entry };
     return signal;
   }
 

@@ -44,6 +44,13 @@ class Brain {
       'bb_squeeze',
       // 1m momentum
       'momentum_1m_bull', 'momentum_1m_bear',
+      // TJR / Smart Money Concepts
+      'tjr_ob_bull', 'tjr_ob_bear',
+      'tjr_fvg_bull', 'tjr_fvg_bear',
+      'tjr_sweep_bull', 'tjr_sweep_bear',
+      'tjr_choch_bull', 'tjr_choch_bear',
+      'tjr_bos_bull', 'tjr_bos_bear',
+      'tjr_discount', 'tjr_premium',
     ];
 
     const saved = this._load();

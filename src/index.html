@@ -1142,7 +1142,7 @@ let scanning       = false;
 let refreshTimer   = null;
 let countdownTimer = null;
 let nextScanAt     = 0;
-const AUTO_SCAN_MS = 5 * 60 * 1000;   // auto-rescan every 5 minutes
+const AUTO_SCAN_MS = 60 * 1000;   // auto-rescan every 60 seconds (near-continuous)
 let settings = {
   groqKey:     '',
   avKey:       '',
@@ -1457,17 +1457,22 @@ function scheduleRefresh() {
   startCountdown(AUTO_SCAN_MS);
 }
 
-// Tick every second showing "Next scan in M:SS"
+// Tick every second showing "Next scan in Xs"
 function startCountdown(ms) {
   if (countdownTimer) clearInterval(countdownTimer);
   nextScanAt = Date.now() + ms;
 
   function tick() {
     const remaining = Math.max(0, nextScanAt - Date.now());
-    const m = Math.floor(remaining / 60000);
-    const s = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
     const el = document.getElementById('countdown-label');
-    if (el) el.textContent = `Next scan in ${m}:${s}`;
+    if (remaining >= 60000) {
+      const m = Math.floor(remaining / 60000);
+      const s = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
+      if (el) el.textContent = `Next scan in ${m}:${s}`;
+    } else {
+      const s = Math.ceil(remaining / 1000);
+      if (el) el.textContent = `Next scan in ${s}s`;
+    }
     if (remaining <= 0) clearInterval(countdownTimer);
   }
   tick();

@@ -50,9 +50,9 @@ class LearningEngine {
     if (!signal || !result) return;
     const uid = signal.uid || signal.id || `${signal.symbol}-${signal.direction}-${Date.now()}`;
 
-    // Prevent duplicate recording (only check if uid is stable — not timestamp-based)
+    // Prevent duplicate recording (only check stable uid — not the timestamp-based fallback)
     const stableUid = signal.uid || signal.id;
-    if (stableUid && this.trades.find(t => t.uid === stableUid && t.result !== 'pending')) return;
+    if (stableUid && this.trades.find(t => t.uid === stableUid)) return;
 
     const trade = {
       uid:        uid || `${signal.symbol}-${Date.now()}`,

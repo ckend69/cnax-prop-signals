@@ -229,7 +229,9 @@ class MarketData {
       if (inst.type === 'crypto') {
         candles = await this._fetchBinance(inst.binance, '1m', Math.min(limit, 500));
       } else if (inst.type === 'futures') {
-        candles = await this._fetchYahooRaw(inst.yf, '1m', limit);
+        // 5d range: futures trade ~23h/day so we need more than 1d to get 300 clean bars
+        // prePost=true: include extended/overnight session (critical for futures)
+        candles = await this._fetchYahooRaw(inst.yf, '1m', limit, '5d', true);
       } else {
         // Forex 1m — Yahoo Finance first (free), then Alpha Vantage (optional key)
         if (inst.yf) {
@@ -370,7 +372,7 @@ class MarketData {
       high:   parseFloat(v['2. high']),
       low:    parseFloat(v['3. low']),
       close:  parseFloat(v['4. close']),
-      volume: 800 + Math.floor(Math.sin(i * 0.7) * 300 + Math.random() * 400),
+      volume: 0,  // Forex is OTC — Alpha Vantage provides no real volume
     }));
   }
 
@@ -387,7 +389,7 @@ class MarketData {
       high:   parseFloat(v['2. high']),
       low:    parseFloat(v['3. low']),
       close:  parseFloat(v['4. close']),
-      volume: Math.floor(Math.random() * 500) + 100,
+      volume: 0,  // Forex is OTC — Alpha Vantage provides no real volume
     }));
   }
 
@@ -417,7 +419,7 @@ class MarketData {
     return this._fetchYahooRaw(ticker, interval, limit);
   }
 
-  async _fetchYahooRaw(ticker, interval, limit, rangeOverride = null) {
+  async _fetchYahooRaw(ticker, interval, limit, rangeOverride = null, prePost = false) {
     const ivMap = { '1m': '1m', '5m': '5m', '15m': '15m', '1h': '1h', '1d': '1d' };
     const iv = ivMap[interval] || '1h';
     const range = rangeOverride || (
@@ -426,11 +428,12 @@ class MarketData {
                   interval === '1m' ? '1d' :
                   interval === '5m' ? '5d' :
                   '5d');
+    const ppParam = prePost ? '&includePrePost=true' : '';
 
     let data;
     for (const host of ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']) {
       try {
-        const path = `/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${iv}&range=${range}`;
+        const path = `/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${iv}&range=${range}${ppParam}`;
         data = await this._fetch(`https://${host}${path}`);
         if (data?.chart?.result?.[0]) break;
       } catch(e) {}

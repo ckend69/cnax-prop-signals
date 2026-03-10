@@ -813,24 +813,6 @@
     .pred-factor.bear .pred-factor-name { color: rgba(255,68,102,.8); }
     .pred-time-hint { font-size: 10px; color: var(--muted); margin-top: 2px; }
 
-    /* ═══════════════════════════════════════════════════
-       TRADE TIMELINE
-    ═══════════════════════════════════════════════════ */
-    .sc-timeline {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
-    }
-    .timeline-label { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
-    .timeline-track { display: flex; align-items: center; gap: 0; height: 20px; border-radius: 4px; overflow: hidden; position: relative; }
-    .timeline-seg {
-      height: 100%; display: flex; align-items: center; justify-content: center;
-      font-size: 9px; font-weight: 700; font-family: var(--mono); transition: flex .3s;
-    }
-    .timeline-seg.open { background: rgba(99,102,241,.3); color: var(--primary); }
-    .timeline-seg.tp   { background: rgba(0,255,136,.5);  color: #fff; }
-    .timeline-seg.sl   { background: rgba(255,68,102,.5); color: #fff; }
-    .timeline-meta { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 6px; }
-    .timeline-est  { font-family: var(--mono); color: var(--cyan); }
   </style>
 </head>
 <body>
@@ -1696,7 +1678,6 @@ function renderSignals() {
     const cardEl  = feed.querySelector(`[data-card-id="${cardId}"]`);
     if (!cardEl) return;
     renderPrediction(s.symbol, cardEl).catch(() => {});
-    renderTradeTimeline(s, cardEl).catch(() => {});
     renderFFEvents(s, cardEl).catch(() => {});
   });
 }
@@ -2563,46 +2544,6 @@ async function renderPrediction(symbol, cardEl) {
     predEl.innerHTML = predHtml;
     aiEl.parentNode.insertBefore(predEl.firstElementChild, aiEl);
   }
-}
-
-// ── Trade timeline render (called from renderSignalCard) ─────────────────
-async function renderTradeTimeline(signal, cardEl) {
-  try {
-    const c1m = await window.marketData.getCandles1m(signal.symbol, 30);
-    const tl  = window.predictionEngine.generateTradeTimeline(signal, c1m, 45);
-    if (!tl || !tl.timeline) return;
-
-    const openSegs  = tl.timeline.filter(t => t.status === 'open').length;
-    const tpSegs    = tl.timeline.filter(t => t.status === 'tp').length;
-    const slSegs    = tl.timeline.filter(t => t.status === 'sl').length;
-    const total     = tl.timeline.length;
-
-    const openPct  = (openSegs / total * 100).toFixed(1);
-    const tpPct    = (tpSegs  / total * 100).toFixed(1);
-    const slPct    = (slSegs  / total * 100).toFixed(1);
-
-    const timelineHtml = `
-      <div class="sc-timeline">
-        <div class="timeline-label">Trade Timeline (0–45 min) &bull; Estimated exit: <span class="timeline-est">${tl.predictedExit}</span></div>
-        <div class="timeline-track">
-          ${openSegs > 0 ? `<div class="timeline-seg open" style="flex:${openSegs}" title="Open (${openSegs} min)">OPEN</div>` : ''}
-          ${tpSegs   > 0 ? `<div class="timeline-seg tp"   style="flex:${tpSegs}"   title="TP Hit (${tpSegs} min)">TP</div>` : ''}
-          ${slSegs   > 0 ? `<div class="timeline-seg sl"   style="flex:${slSegs}"   title="SL Hit (${slSegs} min)">SL</div>` : ''}
-        </div>
-        <div class="timeline-meta">
-          <span>Entry ~now</span>
-          <span>Avg move/min: ${(tl.avgMovePerMin / (window.INSTRUMENTS[signal.symbol]?.pip || 0.0001)).toFixed(1)} pips</span>
-          <span>45 min</span>
-        </div>
-      </div>`;
-
-    const reasonsEl = cardEl.querySelector('.sc-reasons');
-    if (reasonsEl) {
-      const tlEl = document.createElement('div');
-      tlEl.innerHTML = timelineHtml;
-      reasonsEl.parentNode.insertBefore(tlEl.firstElementChild, reasonsEl);
-    }
-  } catch(e) {}
 }
 
 // ── Record trade outcome (WIN / LOSS / SKIP) ──────────────────────────────

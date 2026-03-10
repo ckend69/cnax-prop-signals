@@ -1252,6 +1252,17 @@ document.addEventListener('DOMContentLoaded', () => {
   _updateKZBadge();
   setInterval(_updateKZBadge, 60 * 1000);
 
+  // Brain outcome polling backup — catches overdue checks if setTimeout was
+  // lost during a previous session (checks every 60s, complements _resumePending)
+  setInterval(() => {
+    const now = Date.now();
+    for (const check of (window.brain?.state?.pendingChecks || [])) {
+      if (check.checkAt && check.checkAt <= now) {
+        window.brain._runOutcomeCheck(check);
+      }
+    }
+  }, 60 * 1000);
+
   setStatus('scanning', 'Starting auto-scan…');
   enableScanBtns(true);
 
@@ -1295,8 +1306,8 @@ function saveSettings() {
   settings.groqKey    = document.getElementById('set-groq').value.trim();
   settings.avKey      = document.getElementById('set-av').value.trim();
   settings.finnhubKey = document.getElementById('set-finnhub')?.value.trim() || '';
-  settings.refresh  = parseInt(document.getElementById('set-refresh').value);
-  settings.minConf  = parseInt(document.getElementById('set-minconf').value);
+  settings.refresh  = parseInt(document.getElementById('set-refresh')?.value  || '15') || 15;
+  settings.minConf  = parseInt(document.getElementById('set-minconf')?.value  || '65') || 65;
   settings.forex    = document.getElementById('set-forex').checked;
   settings.futures  = document.getElementById('set-futures').checked;
   settings.crypto   = document.getElementById('set-crypto').checked;

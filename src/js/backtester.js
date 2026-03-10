@@ -51,7 +51,7 @@ class Backtester {
       const pnlDollars  = riskDollars * outcome.rMultiple;
       equity           += pnlDollars;
       peakEquity        = Math.max(peakEquity, equity);
-      const dd          = (peakEquity - equity) / peakEquity * 100;
+      const dd          = peakEquity > 0 ? (peakEquity - equity) / peakEquity * 100 : 0;
       maxDrawdown       = Math.max(maxDrawdown, dd);
 
       trades.push({
@@ -106,7 +106,7 @@ class Backtester {
       const pnlDollars  = riskDollars * outcome.rMultiple;
       equity           += pnlDollars;
       peakEquity        = Math.max(peakEquity, equity);
-      const dd          = (peakEquity - equity) / peakEquity * 100;
+      const dd          = peakEquity > 0 ? (peakEquity - equity) / peakEquity * 100 : 0;
       maxDrawdown       = Math.max(maxDrawdown, dd);
 
       trades.push({

@@ -89,8 +89,9 @@ class TechnicalAnalysis {
     const highMax = Math.max(...slice.map(c => c.high));
     const lowMin  = Math.min(...slice.map(c => c.low));
     const last    = candles[candles.length - 1].close;
-    if (highMax === lowMin) return 50;
-    return ((last - lowMin) / (highMax - lowMin)) * 100;
+    const range = highMax - lowMin;
+    if (range < 1e-10) return 50;   // also guards floating-point near-zero
+    return ((last - lowMin) / range) * 100;
   }
 
   // ── Volume Signal ─────────────────────────────────────────────────────────
@@ -116,9 +117,13 @@ class TechnicalAnalysis {
           c.low  < slice[i+1].low  && c.low  < slice[i+2].low)  swingLows.push(c.low);
     }
     const highs = slice.map(c => c.high), lows = slice.map(c => c.low);
+    const current = slice[slice.length - 1]?.close ?? 0;
     return {
-      resistance: swingHighs.length > 0 ? swingHighs[swingHighs.length - 1] : Math.max(...highs),
-      support:    swingLows.length  > 0 ? swingLows[swingLows.length - 1]   : Math.min(...lows),
+      // Fallback to current price if highs/lows are empty to avoid ±Infinity
+      resistance: swingHighs.length > 0 ? swingHighs[swingHighs.length - 1]
+                : highs.length > 0 ? Math.max(...highs) : current,
+      support:    swingLows.length  > 0 ? swingLows[swingLows.length - 1]
+                : lows.length  > 0 ? Math.min(...lows)  : current,
     };
   }
 
@@ -159,9 +164,9 @@ class TechnicalAnalysis {
     const macd    = this.macd(closes.slice(-30));
     const vol     = this.volumeSignal(candles1m.slice(-20));
 
-    // Recent 5-bar direction
-    const move5   = (closes[closes.length - 1] - closes[closes.length - 6]) /
-                     closes[closes.length - 6] * 100;
+    // Recent 5-bar direction (guard: need at least 6 candles)
+    const ref6    = closes.length >= 6 ? closes[closes.length - 6] : closes[0];
+    const move5   = ref6 > 0 ? ((closes[closes.length - 1] - ref6) / ref6 * 100) : 0;
 
     let score = 0;
     if (rsi > 55)        score += 25;

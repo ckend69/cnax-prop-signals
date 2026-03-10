@@ -231,7 +231,8 @@ class NewsSentiment {
     const label    = this._scoreLabel(score);
     const highImps = articles.filter(a => a.highImpact);
     if (highImps.length > 0) {
-      return `High-impact events in the news for ${display}. Sentiment: ${label}. Key: ${highImps[0].headline?.slice(0, 80) || ''}`;
+      const headline = highImps[0]?.headline?.slice(0, 80) || '';
+      return `High-impact events in the news for ${display}. Sentiment: ${label}. Key: ${headline}`;
     }
     return `${articles.length} recent articles found for ${display}. Aggregate sentiment: ${label}.`;
   }
@@ -245,8 +246,8 @@ class NewsSentiment {
     const ago5  = candles1m[Math.max(0, candles1m.length - 5)].close;
     const ago15 = candles1m[Math.max(0, candles1m.length - 15)].close;
 
-    const move5m  = ((last - ago5)  / ago5  * 100);
-    const move15m = ((last - ago15) / ago15 * 100);
+    const move5m  = ago5  > 0 ? ((last - ago5)  / ago5  * 100) : 0;   // guard div/0
+    const move15m = ago15 > 0 ? ((last - ago15) / ago15 * 100) : 0;
 
     // Determine if price is reacting to news sentiment direction
     const newsDir = sentimentScore > 10 ? 'bullish' : sentimentScore < -10 ? 'bearish' : 'neutral';

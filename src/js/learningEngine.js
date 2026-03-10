@@ -48,10 +48,11 @@ class LearningEngine {
   // signal: the signal object (symbol, direction, confidence, entry, sl, tp1)
   recordOutcome(signal, result) {
     if (!signal || !result) return;
-    const uid = signal.uid || signal.id;
+    const uid = signal.uid || signal.id || `${signal.symbol}-${signal.direction}-${Date.now()}`;
 
-    // Prevent duplicate recording
-    if (uid && this.trades.find(t => t.uid === uid && t.result !== 'pending')) return;
+    // Prevent duplicate recording (only check if uid is stable — not timestamp-based)
+    const stableUid = signal.uid || signal.id;
+    if (stableUid && this.trades.find(t => t.uid === stableUid && t.result !== 'pending')) return;
 
     const trade = {
       uid:        uid || `${signal.symbol}-${Date.now()}`,

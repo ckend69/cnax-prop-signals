@@ -213,7 +213,8 @@ class ChallengeState {
   get apexAccount() {
     const firm = PROP_FIRMS[this.firmKey];
     if (!firm || firm.drawdownType !== 'trailing') return null;
-    return firm.accounts.find(a => a.size === this.accountSize) || firm.accounts[0];
+    const accts = Array.isArray(firm.accounts) ? firm.accounts : [];
+    return accts.find(a => a.size === this.accountSize) || accts[0] || null;
   }
 
   get isTrailingFirm() {

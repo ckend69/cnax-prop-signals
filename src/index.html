@@ -389,6 +389,10 @@
       background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.2);
       color: var(--amber); border-radius: 6px; padding: 4px 10px; font-size: 11px;
     }
+    .sc-sim-badge {
+      font-size: 10px; color: var(--muted); background: var(--surface2);
+      border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px;
+    }
     .pos-size-chip {
       font-family: var(--mono); font-size: 12px; font-weight: 700;
       background: rgba(0,212,255,.08); border: 1px solid rgba(0,212,255,.2);
@@ -813,6 +817,24 @@
     .pred-factor.bear .pred-factor-name { color: rgba(255,68,102,.8); }
     .pred-time-hint { font-size: 10px; color: var(--muted); margin-top: 2px; }
 
+    /* ═══════════════════════════════════════════════════
+       TRADE TIMELINE
+    ═══════════════════════════════════════════════════ */
+    .sc-timeline {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;
+    }
+    .timeline-label { font-size: 10px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 8px; }
+    .timeline-track { display: flex; align-items: center; gap: 0; height: 20px; border-radius: 4px; overflow: hidden; position: relative; }
+    .timeline-seg {
+      height: 100%; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 700; font-family: var(--mono); transition: flex .3s;
+    }
+    .timeline-seg.open { background: rgba(99,102,241,.3); color: var(--primary); }
+    .timeline-seg.tp   { background: rgba(0,255,136,.5);  color: #fff; }
+    .timeline-seg.sl   { background: rgba(255,68,102,.5); color: #fff; }
+    .timeline-meta { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 6px; }
+    .timeline-est  { font-family: var(--mono); color: var(--cyan); }
   </style>
 </head>
 <body>
@@ -897,7 +919,7 @@
       <div class="sidebar-label">Update Balance</div>
       <div style="display:flex;gap:8px;align-items:center;">
         <input class="risk-input" id="balance-input" type="number" placeholder="Current balance" step="1" />
-        <button class="tb-btn" onclick="updateBalance()" style="-webkit-app-region:no-drag;padding:6px 10px;">OK</button>
+        <button class="tb-btn" onclick="updateBalance()" style="-webkit-app-region:no-drag;padding:6px 10px;">✓</button>
       </div>
       <div style="margin-top:6px;font-size:11px;color:var(--muted)">Current: <span id="balance-display" style="color:var(--cyan);font-family:var(--mono)">$10,000.00</span></div>
     </div>
@@ -928,9 +950,9 @@
     <!-- Nav -->
     <div style="flex:1"></div>
     <div style="border-top:1px solid var(--border)">
-      <div class="nav-item active" id="nav-signals"   onclick="setView('signals')">Live Signals</div>
-      <div class="nav-item"        id="nav-history"   onclick="setView('history')">Signal History</div>
-      <div class="nav-item"        id="nav-brain"     onclick="setView('brain')" style="color:#a855f7">Brain</div>
+      <div class="nav-item active" id="nav-signals"   onclick="setView('signals')">⚡ Live Signals</div>
+      <div class="nav-item"        id="nav-history"   onclick="setView('history')">📋 Signal History</div>
+      <div class="nav-item"        id="nav-brain"     onclick="setView('brain')" style="color:#a855f7">🧠 Brain</div>
       <div class="nav-item"        id="nav-bias"      onclick="setView('bias')">Daily Bias</div>
       <div class="nav-item"        id="nav-backtest"  onclick="setView('backtest')">Backtest</div>
       <div class="nav-item"        id="nav-news"      onclick="setView('news')">Market News</div>
@@ -986,13 +1008,19 @@
     <div class="field">
       <label>Alpha Vantage API Key (Forex Data)</label>
       <input type="password" id="set-av" placeholder="alphavantage.co/support → free key" />
-      <div class="hint">Free key — enables live EUR/USD, GBP/USD, XAU/USD data. Without it, Yahoo Finance is used for forex candles.</div>
+      <div class="hint">Free key — enables live EUR/USD, GBP/USD, XAU/USD data. Without it, realistic simulated prices are used.</div>
     </div>
 
     <div class="field">
       <label>Finnhub API Key (News Sentiment)</label>
       <input type="password" id="set-finnhub" placeholder="finnhub.io → free tier" />
       <div class="hint">Optional free key — enables live market news &amp; sentiment analysis. Without it, keyword-based scoring is used.</div>
+    </div>
+
+    <div class="field">
+      <label>Aletheia API Key (Institutional Data)</label>
+      <input type="password" id="set-aletheia" placeholder="aletheiaapi.com → free account" />
+      <div class="hint">Optional free key — adds insider ownership, short squeeze, 52-week range &amp; golden/death cross signals for futures and crypto. Register free at aletheiaapi.com.</div>
     </div>
 
     <div class="field">
@@ -1009,10 +1037,11 @@
     <div class="field">
       <label>Minimum Signal Confidence</label>
       <select id="set-minconf">
-        <option value="55">55% — Show more signals</option>
-        <option value="65" selected>65% — Balanced</option>
-        <option value="75">75% — High quality only</option>
-        <option value="85">85% — Elite setups only</option>
+        <option value="40">40% — Show all signals</option>
+        <option value="50" selected>50% — Recommended (balanced)</option>
+        <option value="60">60% — Higher quality</option>
+        <option value="70">70% — Strong setups only</option>
+        <option value="80">80% — Elite setups only</option>
       </select>
     </div>
 
@@ -1081,14 +1110,6 @@
         <div class="empty-title">No Bias Data</div>
         <div class="empty-sub">Click "Compute Bias" to analyze today's directional setup for all instruments.</div>
       </div>
-    </div>
-
-    <!-- Fix #6: Currency Strength Meter widget -->
-    <div id="cs-widget" style="display:none;margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:12px;">Currency Strength Meter
-        <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:8px;">30-bar 1m momentum — updated with each bias scan</span>
-      </div>
-      <div id="cs-bars" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
   </div>
 </template>
@@ -1204,14 +1225,15 @@ function notifyNewSignal(sig) {
   setTimeout(() => n.close(), 10000);
 }
 let settings = {
-  groqKey:     '',
-  avKey:       '',
-  finnhubKey:  '',
-  refresh:     15,
-  minConf:     65,
-  forex:       true,
-  futures:     true,
-  crypto:      true,
+  groqKey:      '',
+  avKey:        '',
+  finnhubKey:   '',
+  aletheiaKey:  '',
+  refresh:      15,
+  minConf:      50,
+  forex:        true,
+  futures:      true,
+  crypto:       true,
 };
 
 // ── Boot ────────────────────────────────────────────────────────────────────
@@ -1225,21 +1247,6 @@ document.addEventListener('DOMContentLoaded', () => {
   populateFirmUI();
   updateChallengeUI();
   requestNotificationPermission();
-
-  // Fix #2: Update kill zone badge every minute, not just during scans
-  _updateKZBadge();
-  setInterval(_updateKZBadge, 60 * 1000);
-
-  // Brain outcome polling backup — catches overdue checks if setTimeout was
-  // lost during a previous session (checks every 60s, complements _resumePending)
-  setInterval(() => {
-    const now = Date.now();
-    for (const check of (window.brain?.state?.pendingChecks || [])) {
-      if (check.checkAt && check.checkAt <= now) {
-        window.brain._runOutcomeCheck(check);
-      }
-    }
-  }, 60 * 1000);
 
   setStatus('scanning', 'Starting auto-scan…');
   enableScanBtns(true);
@@ -1261,15 +1268,17 @@ function applySettings() {
   window.aiAnalyzer.setApiKey(settings.groqKey);
   window.marketData.setAlphaVantageKey(settings.avKey);
   if (window.newsSentiment) window.newsSentiment.setFinnhubKey(settings.finnhubKey || '');
+  if (window.marketData.setAletheiaKey) window.marketData.setAletheiaKey(settings.aletheiaKey || '');
   scheduleRefresh();
 }
 
 function openSettings() {
   document.getElementById('set-groq').value      = settings.groqKey;
   document.getElementById('set-av').value        = settings.avKey;
-  document.getElementById('set-finnhub').value   = settings.finnhubKey || '';
+  document.getElementById('set-finnhub').value   = settings.finnhubKey   || '';
+  document.getElementById('set-aletheia').value  = settings.aletheiaKey  || '';
   document.getElementById('set-refresh').value   = settings.refresh;
-  document.getElementById('set-minconf').value = settings.minConf;
+  document.getElementById('set-minconf').value   = settings.minConf;
   document.getElementById('set-forex').checked   = settings.forex;
   document.getElementById('set-futures').checked = settings.futures;
   document.getElementById('set-crypto').checked  = settings.crypto;
@@ -1281,18 +1290,22 @@ function closeSettings() {
 }
 
 function saveSettings() {
-  settings.groqKey    = document.getElementById('set-groq').value.trim();
-  settings.avKey      = document.getElementById('set-av').value.trim();
-  settings.finnhubKey = document.getElementById('set-finnhub')?.value.trim() || '';
-  settings.refresh  = parseInt(document.getElementById('set-refresh')?.value  || '15') || 15;
-  settings.minConf  = parseInt(document.getElementById('set-minconf')?.value  || '65') || 65;
+  settings.groqKey     = document.getElementById('set-groq').value.trim();
+  settings.avKey       = document.getElementById('set-av').value.trim();
+  settings.finnhubKey  = document.getElementById('set-finnhub')?.value.trim()  || '';
+  settings.aletheiaKey = document.getElementById('set-aletheia')?.value.trim() || '';
+  settings.refresh  = parseInt(document.getElementById('set-refresh').value);
+  settings.minConf  = parseInt(document.getElementById('set-minconf').value);
   settings.forex    = document.getElementById('set-forex').checked;
   settings.futures  = document.getElementById('set-futures').checked;
   settings.crypto   = document.getElementById('set-crypto').checked;
 
   localStorage.setItem('cnax-settings', JSON.stringify(settings));
   // Clear all caches so new API keys take effect immediately on next scan
-  if (window.marketData) { window.marketData.cache = {}; window.marketData.cache1m = {}; }
+  if (window.marketData) {
+    window.marketData.cache = {}; window.marketData.cache1m = {};
+    window.marketData._aletheiaCache = {};   // reset Aletheia cache on key change
+  }
   if (window.newsSentiment) window.newsSentiment.cache = {};
   if (window.predictionEngine) window.predictionEngine.cache = {};
   applySettings();
@@ -1537,9 +1550,9 @@ async function startScan() {
         sl:         sig.sl,
         riskAmount: challenge.safeRiskPerTrade,
       });
-      // Schedule autonomous outcome check 18 minutes after signal (brain learning)
+      // Schedule autonomous outcome check — delay is timeframe-aware (brain picks it)
       if (!sig.refreshed && sig.features && sig.features.length > 0) {
-        window.brain?.scheduleOutcomeCheck(sig, 18 * 60 * 1000);
+        window.brain?.scheduleOutcomeCheck(sig);
       }
     }
 
@@ -1553,7 +1566,14 @@ async function startScan() {
     signals = filtered;
     document.getElementById('last-scan-time').textContent = new Date().toLocaleTimeString();
 
-    _updateKZBadge();
+    // Update kill zone badge in titlebar
+    const kz = MarketData.getKillZone();
+    const kzEl = document.getElementById('kz-badge');
+    if (kzEl) {
+      kzEl.textContent = kz.boost > 0 ? kz.label : '';
+      kzEl.style.display = kz.boost > 0 ? '' : 'none';
+      kzEl.style.color = kz.color || 'var(--muted)';
+    }
 
     setStatus('live', `${signals.length} signal${signals.length !== 1 ? 's' : ''} found`);
     renderSignals();
@@ -1583,24 +1603,6 @@ function showLoadingState() {
       <div class="empty-title">Scanning Markets…</div>
       <div class="empty-sub">Fetching live data, computing indicators, and generating signals across all enabled markets.</div>
     </div>`;
-}
-
-// ── Kill Zone Badge (Fix #2) ───────────────────────────────────────────────
-// Called on boot and every minute so the badge stays current between scans.
-function _updateKZBadge() {
-  const kz    = MarketData.getKillZone();
-  const kzEl  = document.getElementById('kz-badge');
-  if (!kzEl) return;
-  if (kz.boost > 0) {
-    kzEl.textContent         = kz.label;
-    kzEl.style.display       = '';
-    kzEl.style.color         = kz.color;
-    kzEl.style.background    = `${kz.color}22`;   // 13% opacity tint matching zone colour
-    kzEl.style.border        = `1px solid ${kz.color}55`;
-  } else {
-    kzEl.textContent   = '';
-    kzEl.style.display = 'none';
-  }
 }
 
 // ── Auto-scan scheduler ───────────────────────────────────────────────────
@@ -1678,6 +1680,7 @@ function renderSignals() {
     const cardEl  = feed.querySelector(`[data-card-id="${cardId}"]`);
     if (!cardEl) return;
     renderPrediction(s.symbol, cardEl).catch(() => {});
+    renderTradeTimeline(s, cardEl).catch(() => {});
     renderFFEvents(s, cardEl).catch(() => {});
   });
 }
@@ -1716,8 +1719,8 @@ function renderCard(s) {
 
   // Brain bonus badge
   const brainBadge = s.brainBonus
-    ? `<span class="brain-badge">Brain ${s.brainBonus > 0 ? '+' : ''}${s.brainBonus}</span>`
-    : (s.features?.length > 0 ? `<span class="brain-badge" style="opacity:.5">Brain ${s.features.length}f</span>` : '');
+    ? `<span class="brain-badge">🧠 ${s.brainBonus > 0 ? '+' : ''}${s.brainBonus}</span>`
+    : (s.features?.length > 0 ? `<span class="brain-badge" style="opacity:.5">🧠 ${s.features.length}f</span>` : '');
 
   // Outcome button state from learning engine
   const existingOutcome = window.learningEngine?.getOutcome(uid);
@@ -1798,7 +1801,7 @@ function renderCard(s) {
 
     <!-- Risk Snapshot — money management panel -->
     <div class="sc-money">
-      <div class="sc-money-header">Risk Snapshot</div>
+      <div class="sc-money-header">⚖ Risk Snapshot</div>
       <div class="money-grid">
         <div class="money-item">
           <div class="money-lbl">Max Risk</div>
@@ -1837,14 +1840,15 @@ function renderCard(s) {
         ${!s.blocked && s.posSize ? `<div class="pos-size-chip">Suggested: ${posStr}</div>` : ''}
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
+        ${s.simulated ? '<span class="sc-sim-badge">SIMULATED DATA</span>' : ''}
         <span class="sc-time">${new Date(s.timestamp).toLocaleTimeString()}</span>
       </div>
     </div>
 
     <!-- Outcome recording buttons -->
     <div class="outcome-btns">
-      <button class="outcome-btn win-btn  ${winActive}"  onclick="markResult('${safeUid}','win')">WIN</button>
-      <button class="outcome-btn loss-btn ${lossActive}" onclick="markResult('${safeUid}','loss')">LOSS</button>
+      <button class="outcome-btn win-btn  ${winActive}"  onclick="markResult('${safeUid}','win')">✓ WIN</button>
+      <button class="outcome-btn loss-btn ${lossActive}" onclick="markResult('${safeUid}','loss')">✗ LOSS</button>
       <button class="outcome-btn skip-btn ${skipActive}" onclick="markResult('${safeUid}','skip')">— SKIP</button>
     </div>
   </div>`;
@@ -2111,7 +2115,7 @@ function _buildRulesHTML() {
     <!-- Active challenge limits -->
     <div class="rules-section">
       <div class="rules-section-title">
-        <span class="rs-icon" style="background:rgba(99,102,241,.15);color:var(--primary);">Rules</span>
+        <span class="rs-icon" style="background:rgba(99,102,241,.15);color:var(--primary);">📋</span>
         ${firmName} — ${phase} (Account $${(bal||0).toLocaleString()})
       </div>
       <div class="rules-limit-grid">
@@ -2145,12 +2149,12 @@ function _buildRulesHTML() {
     <!-- Money Management Cheat Sheet -->
     <div class="rules-section">
       <div class="rules-section-title">
-        <span class="rs-icon" style="background:rgba(0,255,136,.1);color:var(--green);">MM</span>
+        <span class="rs-icon" style="background:rgba(0,255,136,.1);color:var(--green);">💰</span>
         Money Management Fundamentals
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(239,68,68,.12);color:var(--red);">1%</div>
+        <div class="concept-icon" style="background:rgba(239,68,68,.12);color:var(--red);">🛡</div>
         <div class="concept-body">
           <div class="concept-title">The 1–2% Rule — Never Risk More</div>
           <div class="concept-desc">Risk only 1–2% of your account on any single trade. At 1%, you survive <strong>100 consecutive losses</strong> before losing your account. Bigger risk per trade = faster ruin, not faster profit.</div>
@@ -2159,7 +2163,7 @@ function _buildRulesHTML() {
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(99,102,241,.12);color:var(--primary);">Sz</div>
+        <div class="concept-icon" style="background:rgba(99,102,241,.12);color:var(--primary);">📐</div>
         <div class="concept-body">
           <div class="concept-title">Position Sizing — Always Math, Never Gut</div>
           <div class="concept-desc">Position size is calculated so that if price hits your stop loss, you lose <em>exactly</em> your planned risk — nothing more. The formula converts dollar risk into lots/contracts.</div>
@@ -2168,7 +2172,7 @@ function _buildRulesHTML() {
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(245,158,11,.12);color:var(--amber);">R:R</div>
+        <div class="concept-icon" style="background:rgba(245,158,11,.12);color:var(--amber);">⚖</div>
         <div class="concept-body">
           <div class="concept-title">Risk:Reward Ratio — Why 2:1 is the Minimum</div>
           <div class="concept-desc">At 2:1 R:R you need only a <strong>34% win rate</strong> to break even. At 1:1 R:R you need 50%. Always target at least 2× reward vs risk. Better setups = higher R:R = fewer wins required.</div>
@@ -2177,7 +2181,7 @@ function _buildRulesHTML() {
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(0,212,255,.12);color:var(--cyan);">BE</div>
+        <div class="concept-icon" style="background:rgba(0,212,255,.12);color:var(--cyan);">🎯</div>
         <div class="concept-body">
           <div class="concept-title">Break-Even Trade — Move SL After +1R</div>
           <div class="concept-desc">Once price moves <strong>+1R in your direction</strong> (equal to your stop loss distance), move your stop loss to your entry price. Worst case: scratch trade. Eliminates the "gave back profit" scenario.</div>
@@ -2186,7 +2190,7 @@ function _buildRulesHTML() {
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(0,255,136,.12);color:var(--green);">50%</div>
+        <div class="concept-icon" style="background:rgba(0,255,136,.12);color:var(--green);">✂</div>
         <div class="concept-body">
           <div class="concept-title">Partial Close — Take Half at TP1</div>
           <div class="concept-desc">At TP1, close 50% of your position and move SL to entry. The remaining 50% rides free toward TP2 with zero risk. This locks in real money while letting winners run — the best of both worlds.</div>
@@ -2195,7 +2199,7 @@ function _buildRulesHTML() {
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(239,68,68,.12);color:var(--red);">DD</div>
+        <div class="concept-icon" style="background:rgba(239,68,68,.12);color:var(--red);">📉</div>
         <div class="concept-body">
           <div class="concept-title">Drawdown Math — Losses Hurt More Than They Look</div>
           <div class="concept-desc">A 10% loss needs 11% gain to recover. A 20% loss needs 25%. A 50% loss needs <strong>100%</strong>. Small consistent losses compound into catastrophic holes. Keep single-trade losses small.</div>
@@ -2204,7 +2208,7 @@ function _buildRulesHTML() {
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(245,158,11,.12);color:var(--amber);">Stop</div>
+        <div class="concept-icon" style="background:rgba(245,158,11,.12);color:var(--amber);">🛑</div>
         <div class="concept-body">
           <div class="concept-title">Daily Stop — Quit After 2–3 Losses</div>
           <div class="concept-desc">If you take 2–3 consecutive losses in a day, <strong>stop trading</strong>. Revenge trading on a bad day is the fastest path to a blown account. Bad days happen; protect what you have left.</div>
@@ -2213,7 +2217,7 @@ function _buildRulesHTML() {
       </div>
 
       <div class="concept-card">
-        <div class="concept-icon" style="background:rgba(99,102,241,.12);color:var(--primary);">Cmpd</div>
+        <div class="concept-icon" style="background:rgba(99,102,241,.12);color:var(--primary);">📈</div>
         <div class="concept-body">
           <div class="concept-title">Compounding — Risk % Not Fixed $</div>
           <div class="concept-desc">Risk 1% of your <em>current</em> balance each trade, not a fixed dollar amount. As your account grows, your risk grows proportionally — this is how small accounts turn into large ones without blowing up.</div>
@@ -2225,7 +2229,7 @@ function _buildRulesHTML() {
     <!-- Quick reference table -->
     <div class="rules-section">
       <div class="rules-section-title">
-        <span class="rs-icon" style="background:rgba(0,212,255,.1);color:var(--cyan);">R:R</span>
+        <span class="rs-icon" style="background:rgba(0,212,255,.1);color:var(--cyan);">📊</span>
         R:R Quick Reference — Win Rate Needed to Profit
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
@@ -2264,13 +2268,7 @@ async function runDailyBias() {
               <div class="bias-sym">${window.INSTRUMENTS[b.symbol]?.display || b.symbol}</div>
               <div class="bias-dir ${dirClass}">${b.direction}</div>
             </div>
-            <div class="bias-stat">
-              <span class="bias-stat-label">Strength</span>
-              <span class="bias-stat-val" style="display:flex;align-items:center;gap:6px;">
-                <span style="color:var(--cyan);font-family:var(--mono)">${b.strength ?? '—'}%</span>
-                ${b.strength != null ? `<span style="display:inline-block;width:60px;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;"><span style="display:block;height:100%;width:${Math.round(((b.strength - 50) / 50) * 100)}%;background:var(--cyan);border-radius:3px;transition:width .4s;"></span></span>` : ''}
-              </span>
-            </div>
+            <div class="bias-stat"><span class="bias-stat-label">Strength</span><span class="bias-stat-val" style="color:var(--cyan)">${b.strength}%</span></div>
             <div class="bias-stat"><span class="bias-stat-label">Gap</span><span class="bias-stat-val" style="color:${isPosGap?'var(--green)':'var(--red)'}">${isPosGap?'+':''}${b.gapPct}%</span></div>
             <div class="bias-stat"><span class="bias-stat-label">VWAP</span><span class="bias-stat-val">${b.vwap?.toFixed(4)}</span></div>
             <div class="bias-stat"><span class="bias-stat-label">Range Position</span><span class="bias-stat-val">${b.pricePosition}%</span></div>
@@ -2283,51 +2281,7 @@ async function runDailyBias() {
     }
   }
 
-  // Fix #6: Fetch & render currency strength after bias cards load
-  renderCurrencyStrengthWidget();
-
   if (btn) { btn.disabled = false; btn.textContent = 'Compute Bias'; }
-}
-
-// Fix #6: Currency Strength Meter ───────────────────────────────────────────
-async function renderCurrencyStrengthWidget() {
-  const widget = document.getElementById('cs-widget');
-  const barsEl = document.getElementById('cs-bars');
-  if (!widget || !barsEl) return;
-
-  barsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;">Loading currency strengths…</div>';
-  widget.style.display = '';
-
-  try {
-    const strengths = await window.marketData.getCurrencyStrengths();
-    if (!strengths) {
-      barsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;">No data — forex candles unavailable</div>';
-      return;
-    }
-
-    // Sort strongest to weakest
-    const sorted = Object.entries(strengths).sort((a, b) => b[1] - a[1]);
-    const maxAbs  = Math.max(...sorted.map(([, v]) => Math.abs(v)), 0.001);
-
-    barsEl.innerHTML = sorted.map(([ccy, val]) => {
-      const pct      = Math.round((val / maxAbs) * 100);
-      const isBull   = val >= 0;
-      const barW     = Math.abs(pct);
-      const barCol   = isBull ? 'var(--green)' : 'var(--red)';
-      const valStr   = (isBull ? '+' : '') + val.toFixed(3);
-
-      return `<div style="display:grid;grid-template-columns:40px 1fr 56px;align-items:center;gap:8px;">
-        <div style="font-family:var(--mono);font-weight:700;font-size:12px;">${ccy}</div>
-        <div style="position:relative;height:12px;background:var(--surface2);border-radius:4px;overflow:hidden;">
-          <div style="position:absolute;${isBull ? 'left:50%' : `right:${50}%`};width:${barW / 2}%;height:100%;background:${barCol};border-radius:4px;transition:width .4s;"></div>
-          <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--border);"></div>
-        </div>
-        <div style="font-family:var(--mono);font-size:11px;color:${barCol};text-align:right;">${valStr}</div>
-      </div>`;
-    }).join('');
-  } catch (e) {
-    barsEl.innerHTML = `<div style="color:var(--muted);font-size:12px;">Error: ${e.message}</div>`;
-  }
 }
 
 // ── Backtest ──────────────────────────────────────────────────────────────
@@ -2368,45 +2322,17 @@ async function runBacktest() {
       const pnlColor = r.totalPnL >= 0 ? 'var(--green)' : 'var(--red)';
       const pfColor  = r.profitFactor >= 1.5 ? 'var(--green)' : r.profitFactor >= 1 ? 'var(--amber)' : 'var(--red)';
       const wrColor  = r.winRate >= 55 ? 'var(--green)' : r.winRate >= 45 ? 'var(--amber)' : 'var(--red)';
-      // Fix #7: analyzePatterns for confidence breakdown
-      const patterns = window.backtester.analyzePatterns(sym);
-      const confBreakdownHtml = patterns && patterns.confWinRates.length > 0
-        ? `<div style="margin-top:12px;">
-            <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Win Rate by Confidence Bracket</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px;">
-              ${patterns.confWinRates.map(b => {
-                const c = parseFloat(b.winRate) >= 55 ? 'var(--green)' : parseFloat(b.winRate) >= 45 ? 'var(--amber)' : 'var(--red)';
-                return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;text-align:center;min-width:80px;">
-                  <div style="font-size:11px;color:var(--muted)">${b.confidence}%+ conf</div>
-                  <div style="font-size:15px;font-weight:700;color:${c};margin:2px 0">${b.winRate}%</div>
-                  <div style="font-size:10px;color:var(--muted)">${b.trades} trades</div>
-                </div>`;
-              }).join('')}
-            </div>
-            <div style="font-size:11px;color:var(--muted);margin-top:8px;">Avg bars to win: ${patterns.avgBarsWin} &nbsp;|&nbsp; Avg bars to loss: ${patterns.avgBarsLoss}</div>
-          </div>`
-        : '';
-
-      // Fix #8: expectancy, streaks, recovery factor colors
-      const expColor   = r.expectancy >= 0 ? 'var(--green)' : 'var(--red)';
-      const rfColor    = r.recoveryFactor >= 2 ? 'var(--green)' : r.recoveryFactor >= 1 ? 'var(--amber)' : 'var(--red)';
-
       results.innerHTML = `
         <div class="bt-summary">
           <div class="bt-stat"><div class="bt-stat-label">Trades</div><div class="bt-stat-val">${r.totalTrades}</div></div>
           <div class="bt-stat"><div class="bt-stat-label">Win Rate</div><div class="bt-stat-val" style="color:${wrColor}">${r.winRate}%</div></div>
           <div class="bt-stat"><div class="bt-stat-label">Avg R</div><div class="bt-stat-val" style="color:${r.avgR>=0?'var(--green)':'var(--red)'}">${r.avgR > 0 ? '+' : ''}${r.avgR}R</div></div>
-          <div class="bt-stat"><div class="bt-stat-label">Expectancy</div><div class="bt-stat-val" style="color:${expColor}">${r.expectancy > 0 ? '+' : ''}${r.expectancy}R</div></div>
-          <div class="bt-stat"><div class="bt-stat-label">Profit Factor</div><div class="bt-stat-val" style="color:${pfColor}">${r.profitFactor === 99 ? '&infin;' : r.profitFactor}</div></div>
-          <div class="bt-stat"><div class="bt-stat-label">Recovery Factor</div><div class="bt-stat-val" style="color:${rfColor}">${r.recoveryFactor}</div></div>
+          <div class="bt-stat"><div class="bt-stat-label">Profit Factor</div><div class="bt-stat-val" style="color:${pfColor}">${r.profitFactor}</div></div>
           <div class="bt-stat"><div class="bt-stat-label">Total P&L</div><div class="bt-stat-val" style="color:${pnlColor}">${r.totalPnL >= 0 ? '+' : ''}$${r.totalPnL.toLocaleString()}</div></div>
           <div class="bt-stat"><div class="bt-stat-label">Max Drawdown</div><div class="bt-stat-val" style="color:var(--red)">${r.maxDrawdown}%</div></div>
           <div class="bt-stat"><div class="bt-stat-label">Wins</div><div class="bt-stat-val bt-win">${r.wins}</div></div>
           <div class="bt-stat"><div class="bt-stat-label">Losses</div><div class="bt-stat-val bt-loss">${r.losses}</div></div>
-          <div class="bt-stat"><div class="bt-stat-label">Max W Streak</div><div class="bt-stat-val bt-win">${r.maxConsecWins}</div></div>
-          <div class="bt-stat"><div class="bt-stat-label">Max L Streak</div><div class="bt-stat-val bt-loss">${r.maxConsecLosses}</div></div>
         </div>
-        ${confBreakdownHtml}
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:auto;max-height:320px;">
           <table class="bt-trade-table">
             <thead><tr>
@@ -2546,6 +2472,46 @@ async function renderPrediction(symbol, cardEl) {
   }
 }
 
+// ── Trade timeline render (called from renderSignalCard) ─────────────────
+async function renderTradeTimeline(signal, cardEl) {
+  try {
+    const c1m = await window.marketData.getCandles1m(signal.symbol, 30);
+    const tl  = window.predictionEngine.generateTradeTimeline(signal, c1m, 45);
+    if (!tl || !tl.timeline) return;
+
+    const openSegs  = tl.timeline.filter(t => t.status === 'open').length;
+    const tpSegs    = tl.timeline.filter(t => t.status === 'tp').length;
+    const slSegs    = tl.timeline.filter(t => t.status === 'sl').length;
+    const total     = tl.timeline.length;
+
+    const openPct  = (openSegs / total * 100).toFixed(1);
+    const tpPct    = (tpSegs  / total * 100).toFixed(1);
+    const slPct    = (slSegs  / total * 100).toFixed(1);
+
+    const timelineHtml = `
+      <div class="sc-timeline">
+        <div class="timeline-label">Trade Timeline (0–45 min) &bull; Estimated exit: <span class="timeline-est">${tl.predictedExit}</span></div>
+        <div class="timeline-track">
+          ${openSegs > 0 ? `<div class="timeline-seg open" style="flex:${openSegs}" title="Open (${openSegs} min)">OPEN</div>` : ''}
+          ${tpSegs   > 0 ? `<div class="timeline-seg tp"   style="flex:${tpSegs}"   title="TP Hit (${tpSegs} min)">TP</div>` : ''}
+          ${slSegs   > 0 ? `<div class="timeline-seg sl"   style="flex:${slSegs}"   title="SL Hit (${slSegs} min)">SL</div>` : ''}
+        </div>
+        <div class="timeline-meta">
+          <span>Entry ~now</span>
+          <span>Avg move/min: ${(tl.avgMovePerMin / (window.INSTRUMENTS[signal.symbol]?.pip || 0.0001)).toFixed(1)} pips</span>
+          <span>45 min</span>
+        </div>
+      </div>`;
+
+    const reasonsEl = cardEl.querySelector('.sc-reasons');
+    if (reasonsEl) {
+      const tlEl = document.createElement('div');
+      tlEl.innerHTML = timelineHtml;
+      reasonsEl.parentNode.insertBefore(tlEl.firstElementChild, reasonsEl);
+    }
+  } catch(e) {}
+}
+
 // ── Record trade outcome (WIN / LOSS / SKIP) ──────────────────────────────
 function markResult(uid, result) {
   // Find the signal from the current scan that matches this uid
@@ -2600,9 +2566,9 @@ function renderBrainTile() {
   el.style.display = 'block';
 
   const stats = window.brain?.getStats() || {
-    totalLearned: 0, totalWins: 0, totalLosses: 0, overallWR: '—',
-    pendingChecks: 0, topFeatures: [], worstFeatures: [], topFingerprints: [], totalWeighted: 0,
-    recommendations: [],
+    totalLearned: 0, totalWins: 0, totalLosses: 0, overallWR: '—', tp2Rate: '—',
+    pendingChecks: 0, topFeatures: [], worstFeatures: [], topFingerprints: [],
+    totalWeighted: 0, sessionBreakdown: [], confidenceCalibration: [], comboCount: 0,
   };
 
   // Synapse dots (decorative)
@@ -2611,6 +2577,38 @@ function renderBrainTile() {
     const y = 10 + Math.floor(i / 3) * 30;
     const delay = (i * 0.4).toFixed(1);
     return `<div class="synapse-dot" style="left:${x}px;top:${y}px;animation-delay:${delay}s"></div>`;
+  }).join('');
+
+  // Session breakdown table
+  const SESSION_LABELS = {
+    asia_open: '🌏 Asia Open', asia_late: '🌏 Asia Late',
+    london: '🇬🇧 London', london_ny: '🔥 London/NY', ny_close: '🗽 NY Close', dead: '💤 Dead Zone',
+  };
+  const sessionRows = (stats.sessionBreakdown || []).length > 0
+    ? (stats.sessionBreakdown || []).map(s => {
+        const wrNum = parseFloat(s.wr);
+        const col   = isNaN(wrNum) ? 'var(--muted)' : wrNum >= 55 ? 'var(--green)' : wrNum < 45 ? 'var(--red)' : 'var(--text)';
+        return `
+        <div class="brain-feat-row">
+          <div class="brain-feat-name">${SESSION_LABELS[s.session] || s.session}</div>
+          <div style="font-size:11px;color:${col}">${s.wr}%</div>
+          <div style="font-size:11px;color:var(--muted)">${s.total} trades</div>
+          <div style="font-size:11px;color:#f59e0b">${s.winsFull} TP2s</div>
+        </div>`;
+      }).join('')
+    : `<div class="brain-feat-row" style="color:var(--muted);font-size:11px;grid-column:1/-1">No session data yet</div>`;
+
+  // Confidence calibration table — are high-confidence signals actually winning more?
+  const confRows = (stats.confidenceCalibration || []).map(c => {
+    const wrNum = parseFloat(c.wr);
+    const col   = isNaN(wrNum) ? 'var(--muted)' : wrNum >= 55 ? 'var(--green)' : wrNum < 45 ? 'var(--red)' : 'var(--text)';
+    return `
+      <div class="brain-feat-row">
+        <div class="brain-feat-name">${c.tier}%</div>
+        <div style="font-size:11px;color:${col}">${c.total > 0 ? c.wr + '%' : '—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.total} trades</div>
+        <div style="font-size:11px;color:#f59e0b">${c.winsFull} TP2s</div>
+      </div>`;
   }).join('');
 
   // Feature table (top features by weight)
@@ -2659,13 +2657,14 @@ function renderBrainTile() {
       <div class="brain-synapse-wrap">${synapseDots}</div>
       <div class="brain-hero-title">
         <div class="brain-pulse"></div>
-        Brain — Adaptive Learning Engine
+        🧠 Brain — Adaptive Learning Engine
       </div>
       <div class="brain-hero-sub">
         The brain autonomously tracks every indicator that fires on each signal, then
-        re-fetches 1m data 18 minutes later to self-score whether the trade would have worked.
-        Over time it up-weights winning indicator combinations and down-weights losers —
-        making every new scan smarter than the last.
+        re-fetches data at a timeframe-aware interval (18 min for 1m, 45 min for 5m) to
+        self-score whether the trade hit TP1 or TP2, or stopped out. Over time it up-weights
+        winning indicator combos, learns which sessions perform best, and calibrates whether
+        high-confidence signals actually win more — making every new scan smarter than the last.
       </div>
     </div>
 
@@ -2679,8 +2678,12 @@ function renderBrainTile() {
         <div class="bs-lbl">Auto WR</div>
       </div>
       <div class="brain-stat">
+        <div class="bs-val" style="color:#f59e0b">${stats.tp2Rate}%</div>
+        <div class="bs-lbl">TP2 Rate</div>
+      </div>
+      <div class="brain-stat">
         <div class="bs-val">${stats.totalWeighted}</div>
-        <div class="bs-lbl">Features Weighted</div>
+        <div class="bs-lbl">Weighted Feats</div>
       </div>
       <div class="brain-stat">
         <div class="bs-val" style="color:var(--amber)">${stats.pendingChecks}</div>
@@ -2688,27 +2691,28 @@ function renderBrainTile() {
       </div>
     </div>
 
-    ${stats.recommendations && stats.recommendations.length > 0 ? `
-    <div class="brain-sect-title">Brain Insights</div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-      ${stats.recommendations.map(r => {
-        const bg  = r.type === 'positive' ? 'rgba(0,255,136,.07)' : r.type === 'warning' ? 'rgba(245,158,11,.07)' : 'rgba(99,102,241,.07)';
-        const bc  = r.type === 'positive' ? 'rgba(0,255,136,.2)'  : r.type === 'warning' ? 'rgba(245,158,11,.2)'  : 'rgba(99,102,241,.2)';
-        const ic  = r.type === 'positive' ? 'var(--green)'         : r.type === 'warning' ? 'var(--amber)'         : 'var(--primary)';
-        const dot = r.type === 'positive' ? '[+]' : r.type === 'warning' ? '[!]' : '[i]';
-        return `<div style="background:${bg};border:1px solid ${bc};border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;display:flex;gap:8px;">
-          <span style="color:${ic};font-weight:700;font-family:var(--mono);flex-shrink:0">${dot}</span>
-          <span>${r.text}</span>
-        </div>`;
-      }).join('')}
-    </div>` : ''}
-
     <div class="brain-sect-title">Top Features by Weight</div>
     <div class="brain-feat-table">
       <div class="brain-feat-row header">
         <div>Feature</div><div>Win Rate</div><div>Samples</div><div>Weight</div>
       </div>
       ${featRows}
+    </div>
+
+    <div class="brain-sect-title">Session Breakdown</div>
+    <div class="brain-feat-table">
+      <div class="brain-feat-row header">
+        <div>Session</div><div>Win Rate</div><div>Samples</div><div>TP2 Hits</div>
+      </div>
+      ${sessionRows}
+    </div>
+
+    <div class="brain-sect-title">Confidence Calibration</div>
+    <div class="brain-feat-table">
+      <div class="brain-feat-row header">
+        <div>Conf Tier</div><div>Win Rate</div><div>Samples</div><div>TP2 Hits</div>
+      </div>
+      ${confRows || '<div class="brain-feat-row" style="color:var(--muted);font-size:11px;grid-column:1/-1">No calibration data yet</div>'}
     </div>
 
     <div class="brain-sect-title">Candle Fingerprints (3-bar Patterns)</div>
@@ -2727,10 +2731,13 @@ function renderBrainTile() {
 
     <div style="font-size:10px;color:var(--muted);margin-top:12px;line-height:1.6">
       <strong style="color:var(--text)">How it works:</strong>
-      Weight 1.0× = neutral (default). Above 1.0× = brain has learned this indicator wins more often.
-      Below 1.0× = brain has learned this indicator is unreliable. Weights update after every outcome check.
-      Fingerprints encode the last 3 candles (R=rising/F=falling + s/m/l body size) — the brain learns which
-      candle sequences precede successful 15-minute trades.
+      Weights (0.3–2.0×) reflect observed win-rates with a 14-day half-life decay so stale data
+      fades back to neutral. Symbol weights blend global (up to 100% with no data) with symbol-specific
+      (up to 80% with enough trades) — the more a symbol is traded, the more personalised its weights.
+      Outcome checks are timeframe-aware: 1m → 18 min, 5m → 45 min, 1H → 90 min.
+      TP2 (full runner) hits are tracked separately from TP1 (partial) hits.
+      Fingerprints encode the last 3 candles: Direction (R/F) + Body (s/m/l) + Wick (U/L/N) — 9 chars total.
+      Combo stats are automatically pruned to 500 entries to prevent storage bloat.
     </div>
   </div>`;
 }
@@ -2782,7 +2789,7 @@ function getMoneyTip(s, rrNum, breakEvenWR) {
 
   // Pick tip based on stable hash of symbol+direction for variety
   const hash = s.symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0) + (isBuy ? 1 : 7);
-  return tips[hash % tips.length];
+  return `💡 ${tips[hash % tips.length]}`;
 }
 
 // ── ForexFactory events on signal cards ──────────────────────────────────

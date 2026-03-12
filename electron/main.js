@@ -88,6 +88,53 @@ ipcMain.handle('fetch-url', async (event, url) => {
   });
 });
 
+// ── IPC: GET with custom headers (for APIs requiring header-based auth) ────
+ipcMain.handle('fetch-get', async (event, { url, headers: extraHeaders = {} }) => {
+  return new Promise((resolve, reject) => {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache',
+      ...extraHeaders,
+    };
+
+    function doRequest(reqUrl, depth) {
+      if (depth > 3) return reject(new Error('Too many redirects'));
+      let urlObj;
+      try { urlObj = new URL(reqUrl); } catch(e) { return reject(e); }
+      const lib = reqUrl.startsWith('https') ? https : http;
+      const options = {
+        hostname: urlObj.hostname,
+        port:     urlObj.port || (reqUrl.startsWith('https') ? 443 : 80),
+        path:     urlObj.pathname + urlObj.search,
+        method:   'GET',
+        headers,
+      };
+      const req = lib.request(options, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          return doRequest(res.headers.location, depth + 1);
+        }
+        const stream = decompressStream(res);
+        const chunks = [];
+        stream.on('data', chunk => chunks.push(chunk));
+        stream.on('end', () => {
+          const body = Buffer.concat(chunks).toString('utf8');
+          try { resolve(JSON.parse(body)); }
+          catch { resolve(body); }
+        });
+        stream.on('error', reject);
+      });
+      req.on('error', reject);
+      req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+      req.end();
+    }
+
+    doRequest(url, 0);
+  });
+});
+
 // ── IPC: POST requests (for Groq API) ──────────────────────────────────────
 ipcMain.handle('fetch-post', async (event, { url, body, headers }) => {
   return new Promise((resolve, reject) => {

@@ -1018,6 +1018,12 @@
     </div>
 
     <div class="field">
+      <label>Aletheia API Key (Institutional Data)</label>
+      <input type="password" id="set-aletheia" placeholder="aletheiaapi.com → free account" />
+      <div class="hint">Optional free key — adds insider ownership, short squeeze, 52-week range &amp; golden/death cross signals for futures and crypto. Register free at aletheiaapi.com.</div>
+    </div>
+
+    <div class="field">
       <label>Auto-Refresh Interval</label>
       <select id="set-refresh">
         <option value="0">Off (manual only)</option>
@@ -1031,10 +1037,11 @@
     <div class="field">
       <label>Minimum Signal Confidence</label>
       <select id="set-minconf">
-        <option value="55">55% — Show more signals</option>
-        <option value="65" selected>65% — Balanced</option>
-        <option value="75">75% — High quality only</option>
-        <option value="85">85% — Elite setups only</option>
+        <option value="40">40% — Show all signals</option>
+        <option value="50" selected>50% — Recommended (balanced)</option>
+        <option value="60">60% — Higher quality</option>
+        <option value="70">70% — Strong setups only</option>
+        <option value="80">80% — Elite setups only</option>
       </select>
     </div>
 
@@ -1218,14 +1225,15 @@ function notifyNewSignal(sig) {
   setTimeout(() => n.close(), 10000);
 }
 let settings = {
-  groqKey:     '',
-  avKey:       '',
-  finnhubKey:  '',
-  refresh:     15,
-  minConf:     65,
-  forex:       true,
-  futures:     true,
-  crypto:      true,
+  groqKey:      '',
+  avKey:        '',
+  finnhubKey:   '',
+  aletheiaKey:  '',
+  refresh:      15,
+  minConf:      50,
+  forex:        true,
+  futures:      true,
+  crypto:       true,
 };
 
 // ── Boot ────────────────────────────────────────────────────────────────────
@@ -1260,15 +1268,17 @@ function applySettings() {
   window.aiAnalyzer.setApiKey(settings.groqKey);
   window.marketData.setAlphaVantageKey(settings.avKey);
   if (window.newsSentiment) window.newsSentiment.setFinnhubKey(settings.finnhubKey || '');
+  if (window.marketData.setAletheiaKey) window.marketData.setAletheiaKey(settings.aletheiaKey || '');
   scheduleRefresh();
 }
 
 function openSettings() {
   document.getElementById('set-groq').value      = settings.groqKey;
   document.getElementById('set-av').value        = settings.avKey;
-  document.getElementById('set-finnhub').value   = settings.finnhubKey || '';
+  document.getElementById('set-finnhub').value   = settings.finnhubKey   || '';
+  document.getElementById('set-aletheia').value  = settings.aletheiaKey  || '';
   document.getElementById('set-refresh').value   = settings.refresh;
-  document.getElementById('set-minconf').value = settings.minConf;
+  document.getElementById('set-minconf').value   = settings.minConf;
   document.getElementById('set-forex').checked   = settings.forex;
   document.getElementById('set-futures').checked = settings.futures;
   document.getElementById('set-crypto').checked  = settings.crypto;
@@ -1280,9 +1290,10 @@ function closeSettings() {
 }
 
 function saveSettings() {
-  settings.groqKey    = document.getElementById('set-groq').value.trim();
-  settings.avKey      = document.getElementById('set-av').value.trim();
-  settings.finnhubKey = document.getElementById('set-finnhub')?.value.trim() || '';
+  settings.groqKey     = document.getElementById('set-groq').value.trim();
+  settings.avKey       = document.getElementById('set-av').value.trim();
+  settings.finnhubKey  = document.getElementById('set-finnhub')?.value.trim()  || '';
+  settings.aletheiaKey = document.getElementById('set-aletheia')?.value.trim() || '';
   settings.refresh  = parseInt(document.getElementById('set-refresh').value);
   settings.minConf  = parseInt(document.getElementById('set-minconf').value);
   settings.forex    = document.getElementById('set-forex').checked;
@@ -1291,7 +1302,10 @@ function saveSettings() {
 
   localStorage.setItem('cnax-settings', JSON.stringify(settings));
   // Clear all caches so new API keys take effect immediately on next scan
-  if (window.marketData) { window.marketData.cache = {}; window.marketData.cache1m = {}; }
+  if (window.marketData) {
+    window.marketData.cache = {}; window.marketData.cache1m = {};
+    window.marketData._aletheiaCache = {};   // reset Aletheia cache on key change
+  }
   if (window.newsSentiment) window.newsSentiment.cache = {};
   if (window.predictionEngine) window.predictionEngine.cache = {};
   applySettings();
@@ -1536,9 +1550,9 @@ async function startScan() {
         sl:         sig.sl,
         riskAmount: challenge.safeRiskPerTrade,
       });
-      // Schedule autonomous outcome check 18 minutes after signal (brain learning)
+      // Schedule autonomous outcome check — delay is timeframe-aware (brain picks it)
       if (!sig.refreshed && sig.features && sig.features.length > 0) {
-        window.brain?.scheduleOutcomeCheck(sig, 18 * 60 * 1000);
+        window.brain?.scheduleOutcomeCheck(sig);
       }
     }
 
@@ -2552,8 +2566,9 @@ function renderBrainTile() {
   el.style.display = 'block';
 
   const stats = window.brain?.getStats() || {
-    totalLearned: 0, totalWins: 0, totalLosses: 0, overallWR: '—',
-    pendingChecks: 0, topFeatures: [], worstFeatures: [], topFingerprints: [], totalWeighted: 0,
+    totalLearned: 0, totalWins: 0, totalLosses: 0, overallWR: '—', tp2Rate: '—',
+    pendingChecks: 0, topFeatures: [], worstFeatures: [], topFingerprints: [],
+    totalWeighted: 0, sessionBreakdown: [], confidenceCalibration: [], comboCount: 0,
   };
 
   // Synapse dots (decorative)
@@ -2562,6 +2577,38 @@ function renderBrainTile() {
     const y = 10 + Math.floor(i / 3) * 30;
     const delay = (i * 0.4).toFixed(1);
     return `<div class="synapse-dot" style="left:${x}px;top:${y}px;animation-delay:${delay}s"></div>`;
+  }).join('');
+
+  // Session breakdown table
+  const SESSION_LABELS = {
+    asia_open: '🌏 Asia Open', asia_late: '🌏 Asia Late',
+    london: '🇬🇧 London', london_ny: '🔥 London/NY', ny_close: '🗽 NY Close', dead: '💤 Dead Zone',
+  };
+  const sessionRows = (stats.sessionBreakdown || []).length > 0
+    ? (stats.sessionBreakdown || []).map(s => {
+        const wrNum = parseFloat(s.wr);
+        const col   = isNaN(wrNum) ? 'var(--muted)' : wrNum >= 55 ? 'var(--green)' : wrNum < 45 ? 'var(--red)' : 'var(--text)';
+        return `
+        <div class="brain-feat-row">
+          <div class="brain-feat-name">${SESSION_LABELS[s.session] || s.session}</div>
+          <div style="font-size:11px;color:${col}">${s.wr}%</div>
+          <div style="font-size:11px;color:var(--muted)">${s.total} trades</div>
+          <div style="font-size:11px;color:#f59e0b">${s.winsFull} TP2s</div>
+        </div>`;
+      }).join('')
+    : `<div class="brain-feat-row" style="color:var(--muted);font-size:11px;grid-column:1/-1">No session data yet</div>`;
+
+  // Confidence calibration table — are high-confidence signals actually winning more?
+  const confRows = (stats.confidenceCalibration || []).map(c => {
+    const wrNum = parseFloat(c.wr);
+    const col   = isNaN(wrNum) ? 'var(--muted)' : wrNum >= 55 ? 'var(--green)' : wrNum < 45 ? 'var(--red)' : 'var(--text)';
+    return `
+      <div class="brain-feat-row">
+        <div class="brain-feat-name">${c.tier}%</div>
+        <div style="font-size:11px;color:${col}">${c.total > 0 ? c.wr + '%' : '—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.total} trades</div>
+        <div style="font-size:11px;color:#f59e0b">${c.winsFull} TP2s</div>
+      </div>`;
   }).join('');
 
   // Feature table (top features by weight)
@@ -2614,9 +2661,10 @@ function renderBrainTile() {
       </div>
       <div class="brain-hero-sub">
         The brain autonomously tracks every indicator that fires on each signal, then
-        re-fetches 1m data 18 minutes later to self-score whether the trade would have worked.
-        Over time it up-weights winning indicator combinations and down-weights losers —
-        making every new scan smarter than the last.
+        re-fetches data at a timeframe-aware interval (18 min for 1m, 45 min for 5m) to
+        self-score whether the trade hit TP1 or TP2, or stopped out. Over time it up-weights
+        winning indicator combos, learns which sessions perform best, and calibrates whether
+        high-confidence signals actually win more — making every new scan smarter than the last.
       </div>
     </div>
 
@@ -2630,8 +2678,12 @@ function renderBrainTile() {
         <div class="bs-lbl">Auto WR</div>
       </div>
       <div class="brain-stat">
+        <div class="bs-val" style="color:#f59e0b">${stats.tp2Rate}%</div>
+        <div class="bs-lbl">TP2 Rate</div>
+      </div>
+      <div class="brain-stat">
         <div class="bs-val">${stats.totalWeighted}</div>
-        <div class="bs-lbl">Features Weighted</div>
+        <div class="bs-lbl">Weighted Feats</div>
       </div>
       <div class="brain-stat">
         <div class="bs-val" style="color:var(--amber)">${stats.pendingChecks}</div>
@@ -2645,6 +2697,22 @@ function renderBrainTile() {
         <div>Feature</div><div>Win Rate</div><div>Samples</div><div>Weight</div>
       </div>
       ${featRows}
+    </div>
+
+    <div class="brain-sect-title">Session Breakdown</div>
+    <div class="brain-feat-table">
+      <div class="brain-feat-row header">
+        <div>Session</div><div>Win Rate</div><div>Samples</div><div>TP2 Hits</div>
+      </div>
+      ${sessionRows}
+    </div>
+
+    <div class="brain-sect-title">Confidence Calibration</div>
+    <div class="brain-feat-table">
+      <div class="brain-feat-row header">
+        <div>Conf Tier</div><div>Win Rate</div><div>Samples</div><div>TP2 Hits</div>
+      </div>
+      ${confRows || '<div class="brain-feat-row" style="color:var(--muted);font-size:11px;grid-column:1/-1">No calibration data yet</div>'}
     </div>
 
     <div class="brain-sect-title">Candle Fingerprints (3-bar Patterns)</div>
@@ -2663,10 +2731,13 @@ function renderBrainTile() {
 
     <div style="font-size:10px;color:var(--muted);margin-top:12px;line-height:1.6">
       <strong style="color:var(--text)">How it works:</strong>
-      Weight 1.0× = neutral (default). Above 1.0× = brain has learned this indicator wins more often.
-      Below 1.0× = brain has learned this indicator is unreliable. Weights update after every outcome check.
-      Fingerprints encode the last 3 candles (R=rising/F=falling + s/m/l body size) — the brain learns which
-      candle sequences precede successful 15-minute trades.
+      Weights (0.3–2.0×) reflect observed win-rates with a 14-day half-life decay so stale data
+      fades back to neutral. Symbol weights blend global (up to 100% with no data) with symbol-specific
+      (up to 80% with enough trades) — the more a symbol is traded, the more personalised its weights.
+      Outcome checks are timeframe-aware: 1m → 18 min, 5m → 45 min, 1H → 90 min.
+      TP2 (full runner) hits are tracked separately from TP1 (partial) hits.
+      Fingerprints encode the last 3 candles: Direction (R/F) + Body (s/m/l) + Wick (U/L/N) — 9 chars total.
+      Combo stats are automatically pruned to 500 entries to prevent storage bloat.
     </div>
   </div>`;
 }

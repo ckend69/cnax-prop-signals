@@ -1,13 +1,17 @@
 // brain.js — Autonomous adaptive learning engine
 // Tracks every indicator feature that fires on each signal, then auto-checks
-// outcomes ~18 minutes later to build weighted knowledge about what actually works.
+// outcomes after signal generation to build weighted knowledge about what works.
 //
 // Architecture:
-//   • Feature weights (0.3–2.0) — per-indicator win-rate multipliers
-//   • Combo stats — pairs of indicators that win together
-//   • Confluence stats — bonus/penalty for N-way agreement
-//   • Fingerprint stats — 3-bar candle sequence pattern memory
-//   • Pending checks — signals re-fetched 18 min after generation for auto-learning
+//   • Feature weights (0.3–2.0) — per-indicator win-rate multipliers (w/ 14-day decay)
+//   • Symbol weights            — per-symbol blend, data-driven (more trades → more weight)
+//   • Combo stats               — pairs of indicators that win together (pruned at 500)
+//   • Confluence stats          — bonus/penalty for N-way agreement
+//   • Fingerprint stats         — 3-bar candle sequence with wick flag (9-char code)
+//   • Session stats             — win-rates by market session (Asia / London / NY)
+//   • Confidence calibration    — outcomes bucketed by confidence tier (50-60 / 60-70 …)
+//   • TP2 tracking              — distinguishes WIN (TP1) from WIN_FULL (TP2 hit)
+//   • Pending checks            — timeframe-aware outcome checks scheduled after generation
 
 class Brain {
   constructor() {
@@ -63,7 +67,33 @@ class Brain {
       'funding_bull', 'funding_bear',
       // Currency Strength
       'strength_bull', 'strength_bear',
+      // Aletheia institutional data
+      'aletheia_short_squeeze', 'aletheia_short_crowd',
+      'aletheia_insider', 'aletheia_institution', 'aletheia_high_beta',
+      'aletheia_golden_cross', 'aletheia_death_cross',
+      'aletheia_52wk_low', 'aletheia_52wk_high',
+      'aletheia_crypto_52wk_low', 'aletheia_crypto_52wk_high',
+      // Williams %R (oscillator confirmation)
+      'willr_oversold', 'willr_overbought',
+      // ADX — trend strength and direction
+      'adx_trend_bull', 'adx_trend_bear',
+      // Supertrend — dynamic trailing S/R
+      'supertrend_bull', 'supertrend_bear',
+      // Pivot Points — institutional daily levels
+      'pivot_support', 'pivot_resistance',
+      // OBV divergence — smart money volume analysis
+      'obv_div_bull', 'obv_div_bear',
+      // Ichimoku Cloud — macro bias + TK cross timing
+      'ichimoku_cloud_bull', 'ichimoku_cloud_bear',
+      'ichimoku_tk_bull', 'ichimoku_tk_bear',
+      // Crypto sentiment (free APIs, no key required)
+      'fear_greed_fear', 'fear_greed_greed',
+      'oi_rising_bull', 'oi_rising_bear',
+      'ls_ratio_bull', 'ls_ratio_bear',
     ];
+
+    // Lazy weight-recalc flag (improvement #10)
+    this._weightsDirty = false;
 
     const saved = this._load();
     this.state = saved || this._freshState();
@@ -80,6 +110,10 @@ class Brain {
     if (!this.state.totalLearned)       this.state.totalLearned       = 0;
     if (!this.state.totalWins)          this.state.totalWins          = 0;
     if (!this.state.totalLosses)        this.state.totalLosses        = 0;
+    // New fields (improvements #4, #5, #6)
+    if (!this.state.sessionStats)       this.state.sessionStats       = {};
+    if (!this.state.confidenceStats)    this.state.confidenceStats    = {};
+    if (!this.state.totalWinsFull)      this.state.totalWinsFull      = 0;
   }
 
   _freshState() {
@@ -89,33 +123,57 @@ class Brain {
       featureStats:       {},  // feature -> { wins, losses, lastTs }
       comboStats:         {},  // 'feat1:feat2' -> { wins, losses }
       confluenceStats:    {},  // String(n) -> { wins, losses }
-      fingerprintStats:   {},  // '3bar-code' -> { wins, losses }
-      symbolFeatureStats: {},  // symbol -> { feature -> { wins, losses } }
+      fingerprintStats:   {},  // '9-char-code' -> { wins, losses }
+      symbolFeatureStats: {},  // symbol -> { feature -> { wins, losses, lastTs } }
+      sessionStats:       {},  // session -> { wins, losses, winsFull }
+      confidenceStats:    {},  // '50-60' -> { wins, losses, winsFull }
       pendingChecks:      [],  // { signal, checkAt }
       totalLearned:       0,
       totalWins:          0,
       totalLosses:        0,
+      totalWinsFull:      0,   // TP2 hits
     };
   }
 
   // ── Feature weight getter ──────────────────────────────────────────────────
-  // Returns a multiplier in [0.3, 2.0] based on observed win-rate.
-  // Defaults to 1.0 (neutral) when not enough data exists.
+  // Improvement #10: lazy recalc — weights only recomputed when marked dirty.
+  // Returns a multiplier in [0.3, 2.0]. Defaults to 1.0 when no data yet.
   getWeight(feature) {
+    if (this._weightsDirty) {
+      this._recalcWeights();
+      this._weightsDirty = false;
+    }
     const w = this.state.weights[feature];
     return (w !== undefined) ? Math.max(0.3, Math.min(2.0, w)) : 1.0;
   }
 
+  // ── Per-symbol weight getter ───────────────────────────────────────────────
+  // Improvement #1: data-driven blend — the more symbol-specific data we have,
+  // the more we trust the symbol weight over the global weight.
+  //   0 trades  → 100% global
+  //  10 trades  → 50% global / 50% symbol
+  //  30 trades  → ~25% global / 75% symbol
+  //  50+ trades → ~17% global / ~83% symbol  (capped at 80% symbol)
+  getSymbolWeight(symbol, feature) {
+    const symStats = this.state.symbolFeatureStats?.[symbol]?.[feature];
+    const glbW     = this.getWeight(feature);
+    if (!symStats) return glbW;
+
+    const symW = this.state.symbolWeights?.[symbol]?.[feature];
+    if (symW === undefined) return glbW;
+
+    const symCount = symStats.wins + symStats.losses;
+    const symBlend = Math.min(0.80, symCount / (symCount + 10));
+    return parseFloat((glbW * (1 - symBlend) + symW * symBlend).toFixed(3));
+  }
+
   // ── Confluence bonus: N indicators firing together ─────────────────────────
-  // Returns bonus points based on how many features are aligned.
-  // Brain-learned adjustments kick in after 5+ samples; default fallback used earlier.
   getConfluenceBonus(features) {
     const n   = features.length;
     const key = String(n);
     const stat = this.state.confluenceStats[key];
 
     if (!stat || (stat.wins + stat.losses) < 5) {
-      // Default heuristic: reward multi-indicator confluence
       if (n >= 8) return 14;
       if (n >= 6) return 10;
       if (n >= 4) return  6;
@@ -123,12 +181,10 @@ class Brain {
       return 0;
     }
     const wr = stat.wins / (stat.wins + stat.losses);
-    // 70% WR → +15 pts, 50% WR → 0 pts, 30% WR → -10 pts
     return Math.round((wr - 0.5) * 50);
   }
 
   // ── Combo bonus: known-good pairs of indicators ────────────────────────────
-  // Checks every pairwise combo and sums learned bonuses.
   getComboBonus(features) {
     let bonus = 0;
     for (let i = 0; i < features.length; i++) {
@@ -149,8 +205,8 @@ class Brain {
   }
 
   // ── Fingerprint bonus: 3-bar candle sequence memory ───────────────────────
-  // Encodes the last 3 candles as e.g. "RlFsRm" (rising-large, falling-small…)
-  // Returns { bonus: pts, fp: 'code' }
+  // Improvement #9: wick flag added (U/L/N) — 3 chars per candle → 9-char code.
+  // Example: "RlLFsNRmU" → large bull bar w/ lower-wick, small doji, medium bull w/ upper-wick
   getFingerprintBonus(candles, atr) {
     const fp   = this._fingerprint(candles, atr);
     const stat = this.state.fingerprintStats[fp];
@@ -162,16 +218,40 @@ class Brain {
     return { bonus, fp };
   }
 
+  // ── Session bonus: optional per-session feature boost ─────────────────────
+  // Returns a small pts adjustment (-8 to +8) based on session win-rate for
+  // this feature. Only kicks in after 5+ session samples.
+  getSessionBonus(session, features) {
+    const stat = this.state.sessionStats[session];
+    if (!stat || (stat.wins + stat.losses) < 5) return 0;
+    const wr = stat.wins / (stat.wins + stat.losses);
+    return Math.round((wr - 0.5) * 16);   // ±8 pts max
+  }
+
   // ── Schedule an autonomous outcome check ───────────────────────────────────
-  // Called immediately after a signal is generated.
-  // Re-fetches 1m data 18 minutes later and auto-determines WIN/LOSS.
-  scheduleOutcomeCheck(signal, delayMs = 18 * 60 * 1000) {
+  // Improvement #2: timeframe-aware delay.
+  //   1m signals → 18 min  (TP1 reachable in that window)
+  //   5m signals → 45 min  (TP1 usually takes 20-40 min)
+  //   1H signals → 90 min  (TP1 takes hours, check at reasonable interval)
+  scheduleOutcomeCheck(signal, delayMs) {
     if (!signal || !signal.features || signal.features.length === 0) return;
+
+    // Auto-select delay from timeframe if not explicitly provided
+    if (delayMs === undefined) {
+      const tf = signal.timeframe || '1m';
+      if      (tf === '5m') delayMs = 45 * 60 * 1000;
+      else if (tf === '1H') delayMs = 90 * 60 * 1000;
+      else                  delayMs = 18 * 60 * 1000;
+    }
+
+    // Tag the signal with its session at generation time so _applyOutcome can use it
+    if (!signal.session) signal.session = this._detectSession(Date.now());
+
     const check = { signal, checkAt: Date.now() + delayMs };
     this.state.pendingChecks.push(check);
     this._save();
     setTimeout(() => this._runOutcomeCheck(check), delayMs);
-    console.log(`Brain: outcome check scheduled for ${signal.symbol} ${signal.direction} in ${Math.round(delayMs/60000)} min`);
+    console.log(`Brain: outcome check scheduled for ${signal.symbol} ${signal.direction} [${signal.timeframe || '1m'}] in ${Math.round(delayMs / 60000)} min`);
   }
 
   async _runOutcomeCheck(check) {
@@ -180,7 +260,7 @@ class Brain {
       if (!signal || !signal.tp1 || !signal.sl) return;
 
       // Fetch recent 1m candles
-      const candles = await window.marketData.getCandles(signal.symbol, '1m', 30);
+      const candles = await window.marketData.getCandles(signal.symbol, '1m', 100);
       if (!candles || candles.length < 5) return;
 
       // Only consider candles that occurred AFTER signal generation
@@ -194,41 +274,56 @@ class Brain {
       const maxHigh = Math.max(...after.map(c => c.high));
       const minLow  = Math.min(...after.map(c => c.low));
 
+      // Improvement #5: distinguish TP2 hits (WIN_FULL) from TP1 hits (WIN)
       let result;
       if (signal.direction === 'BUY') {
         if      (minLow  <= signal.sl)  result = 'LOSS';
+        else if (signal.tp2 && maxHigh >= signal.tp2) result = 'WIN_FULL';
         else if (maxHigh >= signal.tp1) result = 'WIN';
-        else result = null;   // TP/SL not yet hit — skip (too early)
+        else result = null;   // not yet resolved — skip
       } else {
         if      (maxHigh >= signal.sl)  result = 'LOSS';
+        else if (signal.tp2 && minLow <= signal.tp2) result = 'WIN_FULL';
         else if (minLow  <= signal.tp1) result = 'WIN';
         else result = null;
       }
 
       if (result) {
         this._applyOutcome(check, result);
-        const msg = `Auto [${result}] ${signal.symbol} ${signal.direction} | ${(signal.features||[]).length} features | weight adj pending`;
+        const isFullWin = result === 'WIN_FULL';
+        const label     = isFullWin ? 'WIN_FULL' : result;
+        const msg = `Auto [${label}] ${signal.symbol} ${signal.direction} | ${(signal.features || []).length} features | conf ${signal.confidence}%`;
         console.log('Brain', msg);
-        // Push to UI activity log if available
+
         if (typeof window._brainLog === 'function') {
-          window._brainLog(msg, result === 'WIN' ? 'win' : 'loss');
+          window._brainLog(msg, result === 'LOSS' ? 'loss' : 'win');
         }
-        // Desktop notification with trailing stop guidance on WIN
-        if (result === 'WIN' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          const tp2Str = signal.tp2 ? ` → trail to TP2 ${signal.tp2.toFixed ? signal.tp2.toFixed(4) : signal.tp2}` : '';
-          new Notification(`✅ TP1 Hit — ${signal.symbol} ${signal.direction}`, {
-            body: `Move SL to breakeven (${signal.entry?.toFixed ? signal.entry.toFixed(4) : signal.entry})${tp2Str}`,
-            silent: false,
-          });
-          if (typeof window._brainLog === 'function') {
-            window._brainLog(`💹 ${signal.symbol}: TP1 hit — move SL to breakeven, trail toward TP2`, 'win');
+
+        // Desktop notification
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          if (isFullWin) {
+            new Notification(`🏆 TP2 Hit — ${signal.symbol} ${signal.direction}`, {
+              body: `Full runner — TP2 reached at ${signal.tp2?.toFixed ? signal.tp2.toFixed(4) : signal.tp2}. Outstanding!`,
+              silent: false,
+            });
+            if (typeof window._brainLog === 'function') {
+              window._brainLog(`🏆 ${signal.symbol}: TP2 hit — full move captured!`, 'win');
+            }
+          } else if (result === 'WIN') {
+            const tp2Str = signal.tp2 ? ` → trail to TP2 ${signal.tp2.toFixed ? signal.tp2.toFixed(4) : signal.tp2}` : '';
+            new Notification(`✅ TP1 Hit — ${signal.symbol} ${signal.direction}`, {
+              body: `Move SL to breakeven (${signal.entry?.toFixed ? signal.entry.toFixed(4) : signal.entry})${tp2Str}`,
+              silent: false,
+            });
+            if (typeof window._brainLog === 'function') {
+              window._brainLog(`💹 ${signal.symbol}: TP1 hit — move SL to breakeven, trail toward TP2`, 'win');
+            }
+          } else {
+            new Notification(`❌ SL Hit — ${signal.symbol} ${signal.direction}`, {
+              body: `Stop loss triggered. Brain weight updated.`,
+              silent: true,
+            });
           }
-        }
-        if (result === 'LOSS' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(`❌ SL Hit — ${signal.symbol} ${signal.direction}`, {
-            body: `Stop loss triggered. Brain weight updated.`,
-            silent: true,
-          });
         }
       }
 
@@ -243,6 +338,9 @@ class Brain {
   // ── Manual learning (from WIN/LOSS buttons) ────────────────────────────────
   manualOutcome(signal, result) {
     if (!signal || !result) return;
+    if (!signal.session) signal.session = this._detectSession(
+      signal.timestamp ? new Date(signal.timestamp).getTime() : Date.now()
+    );
     const check = { signal };
     this._applyOutcome(check, result);
   }
@@ -252,20 +350,29 @@ class Brain {
     const { signal } = check;
     const features   = signal.features || [];
     const fp         = signal.fingerprint || '?';
-    const win        = result === 'WIN';
+    const win        = result === 'WIN' || result === 'WIN_FULL';
+    const winFull    = result === 'WIN_FULL';
     const n          = features.length;
+    const now        = Date.now();
 
-    const now = Date.now();
+    // Improvement #4: session detection
+    const session = signal.session || this._detectSession(
+      signal.timestamp ? new Date(signal.timestamp).getTime() : now
+    );
 
-    // Feature stats (individual indicator win-rates) + recency timestamp
+    // Improvement #6: confidence tier
+    const conf = signal.confidence || 0;
+    const tier = conf < 60 ? '50-60' : conf < 70 ? '60-70' : conf < 80 ? '70-80' : conf < 90 ? '80-90' : '90-100';
+
+    // ── Feature stats (individual indicator win-rates + recency timestamp) ──
     for (const feat of features) {
       if (!this.state.featureStats[feat]) this.state.featureStats[feat] = { wins: 0, losses: 0 };
       if (win) this.state.featureStats[feat].wins++;
       else     this.state.featureStats[feat].losses++;
-      this.state.featureStats[feat].lastTs = now;  // track recency for decay
+      this.state.featureStats[feat].lastTs = now;
     }
 
-    // Per-symbol feature stats (symbol-specific learning)
+    // ── Per-symbol feature stats (improvement #3: add lastTs for decay) ─────
     const sym = signal.symbol;
     if (sym) {
       if (!this.state.symbolFeatureStats[sym]) this.state.symbolFeatureStats[sym] = {};
@@ -274,10 +381,11 @@ class Brain {
           this.state.symbolFeatureStats[sym][feat] = { wins: 0, losses: 0 };
         if (win) this.state.symbolFeatureStats[sym][feat].wins++;
         else     this.state.symbolFeatureStats[sym][feat].losses++;
+        this.state.symbolFeatureStats[sym][feat].lastTs = now;  // was missing before
       }
     }
 
-    // Combo stats (pairwise)
+    // ── Combo stats (pairwise) ───────────────────────────────────────────────
     for (let i = 0; i < features.length; i++) {
       for (let j = i + 1; j < features.length; j++) {
         const key = features[i] + ':' + features[j];
@@ -287,7 +395,7 @@ class Brain {
       }
     }
 
-    // Confluence stats (N-way)
+    // ── Confluence stats (N-way) ─────────────────────────────────────────────
     if (n > 0) {
       const nKey = String(n);
       if (!this.state.confluenceStats[nKey]) this.state.confluenceStats[nKey] = { wins: 0, losses: 0 };
@@ -295,92 +403,128 @@ class Brain {
       else     this.state.confluenceStats[nKey].losses++;
     }
 
-    // Fingerprint stats
+    // ── Fingerprint stats ────────────────────────────────────────────────────
     if (fp !== '?') {
       if (!this.state.fingerprintStats[fp]) this.state.fingerprintStats[fp] = { wins: 0, losses: 0 };
       if (win) this.state.fingerprintStats[fp].wins++;
       else     this.state.fingerprintStats[fp].losses++;
     }
 
-    // Totals
-    this.state.totalLearned++;
-    if (win) this.state.totalWins++;
-    else     this.state.totalLosses++;
+    // ── Session stats (improvement #4) ──────────────────────────────────────
+    if (!this.state.sessionStats[session]) this.state.sessionStats[session] = { wins: 0, losses: 0, winsFull: 0 };
+    if (win)     this.state.sessionStats[session].wins++;
+    else         this.state.sessionStats[session].losses++;
+    if (winFull) this.state.sessionStats[session].winsFull = (this.state.sessionStats[session].winsFull || 0) + 1;
 
-    // Recalculate all weights from updated stats
-    this._recalcWeights();
+    // ── Confidence tier stats (improvement #6) ───────────────────────────────
+    if (!this.state.confidenceStats[tier]) this.state.confidenceStats[tier] = { wins: 0, losses: 0, winsFull: 0 };
+    if (win)     this.state.confidenceStats[tier].wins++;
+    else         this.state.confidenceStats[tier].losses++;
+    if (winFull) this.state.confidenceStats[tier].winsFull = (this.state.confidenceStats[tier].winsFull || 0) + 1;
+
+    // ── Totals (improvement #5: track TP2 hits separately) ──────────────────
+    this.state.totalLearned++;
+    if (win)     this.state.totalWins++;
+    else         this.state.totalLosses++;
+    if (winFull) this.state.totalWinsFull = (this.state.totalWinsFull || 0) + 1;
+
+    // Improvement #10: mark dirty instead of recalculating immediately
+    this._weightsDirty = true;
+    // Improvement #8: prune combo stats to prevent localStorage bloat
+    this._pruneComboStats();
     this._save();
   }
 
   // ── Recalculate feature weights from observed win-rates ───────────────────
-  // Uses time-decay: weights fade back towards neutral (1.0) if no recent outcomes.
-  // Half-life of 14 days — a feature with no activity for 14 days retains 50% of its learned edge.
+  // Improvement #3: symbol weights now also apply 14-day half-life time decay.
+  // Half-life of 14 days — a feature with no activity for 14 days retains 50% of its edge.
   _recalcWeights() {
-    const now         = Date.now();
-    const halfLifeMs  = 14 * 24 * 60 * 60 * 1000;  // 14-day half-life
+    const now        = Date.now();
+    const halfLifeMs = 14 * 24 * 60 * 60 * 1000;
 
-    // Global weights (all symbols combined)
+    // ── Global weights (all symbols combined) ──────────────────────────────
     for (const [feat, stat] of Object.entries(this.state.featureStats)) {
       const total = stat.wins + stat.losses;
       if (total < 3) continue;
-
       const wr        = stat.wins / total;
       const rawWeight = 0.3 + wr * 1.7;   // 0% WR→0.3, 50%→1.0, 100%→2.0
-
-      // Staleness decay: blend rawWeight toward neutral (1.0) based on how stale the data is
-      const decay  = stat.lastTs ? Math.pow(0.5, (now - stat.lastTs) / halfLifeMs) : 0.5;
-      const weight = 1.0 + (rawWeight - 1.0) * Math.max(0.1, decay);
-
+      const decay     = stat.lastTs ? Math.pow(0.5, (now - stat.lastTs) / halfLifeMs) : 0.5;
+      const weight    = 1.0 + (rawWeight - 1.0) * Math.max(0.1, decay);
       this.state.weights[feat] = parseFloat(Math.max(0.3, Math.min(2.0, weight)).toFixed(3));
     }
 
-    // Per-symbol weights
+    // ── Per-symbol weights (now with decay — previously missing) ───────────
     for (const [sym, featMap] of Object.entries(this.state.symbolFeatureStats)) {
       if (!this.state.symbolWeights[sym]) this.state.symbolWeights[sym] = {};
       for (const [feat, stat] of Object.entries(featMap)) {
         const total = stat.wins + stat.losses;
         if (total < 3) continue;
-        const wr     = stat.wins / total;
-        const weight = 0.3 + wr * 1.7;
+        const wr        = stat.wins / total;
+        const rawWeight = 0.3 + wr * 1.7;
+        // Apply staleness decay using symbol-specific lastTs
+        const decay     = stat.lastTs ? Math.pow(0.5, (now - stat.lastTs) / halfLifeMs) : 0.5;
+        const weight    = 1.0 + (rawWeight - 1.0) * Math.max(0.1, decay);
         this.state.symbolWeights[sym][feat] = parseFloat(Math.max(0.3, Math.min(2.0, weight)).toFixed(3));
       }
     }
   }
 
-  // ── Per-symbol weight getter ───────────────────────────────────────────────
-  // Returns a blend of global weight (70%) and symbol-specific weight (30%).
-  // Falls back to global weight alone if not enough symbol-specific data.
-  getSymbolWeight(symbol, feature) {
-    const symW = this.state.symbolWeights?.[symbol]?.[feature];
-    const glbW = this.getWeight(feature);
-    if (symW === undefined) return glbW;
-    // Blend: 70% global + 30% symbol-specific for robustness
-    return parseFloat((glbW * 0.7 + symW * 0.3).toFixed(3));
+  // ── Market session detector ────────────────────────────────────────────────
+  // Improvement #4: tag signals with their session so the brain can learn
+  // session-specific win-rates (London vs NY vs Asia have very different dynamics).
+  _detectSession(tsMs) {
+    const hour = new Date(tsMs).getUTCHours();
+    if (hour >= 23 || hour < 3)  return 'asia_open';    // 11pm–3am UTC
+    if (hour >= 3  && hour < 7)  return 'asia_late';    // 3–7am UTC
+    if (hour >= 7  && hour < 12) return 'london';       // 7–12pm UTC
+    if (hour >= 12 && hour < 16) return 'london_ny';    // 12–4pm UTC (overlap — best)
+    if (hour >= 16 && hour < 20) return 'ny_close';     // 4–8pm UTC
+    return 'dead';                                       // 8–11pm UTC
   }
 
-  // ── 3-bar candle fingerprint ───────────────────────────────────────────────
-  // Encodes each of the last 3 candles as Direction + Body-size:
-  //   R = rising (close ≥ open), F = falling
-  //   s = small body (< 0.3 ATR), m = medium, l = large (> 0.7 ATR)
-  // Example: "RlFsRm" → large bullish bar, small bearish bar, medium bullish bar
+  // ── Combo stats pruning (improvement #8) ──────────────────────────────────
+  // With 65+ features, O(n²) pairs can grow to 2000+ entries per signal.
+  // After hitting 500 combos, evict those with the fewest total samples.
+  _pruneComboStats() {
+    const MAX_COMBOS = 500;
+    const entries = Object.entries(this.state.comboStats);
+    if (entries.length <= MAX_COMBOS) return;
+    // Sort ascending by sample count; remove the least-seen ones
+    entries.sort((a, b) => (a[1].wins + a[1].losses) - (b[1].wins + b[1].losses));
+    const toRemove = entries.slice(0, entries.length - MAX_COMBOS);
+    for (const [key] of toRemove) delete this.state.comboStats[key];
+    console.log(`Brain: pruned ${toRemove.length} low-sample combo entries`);
+  }
+
+  // ── 3-bar candle fingerprint (improvement #9: wick flag added) ───────────
+  // Each candle encoded as Direction + Body-size + Wick-dominant:
+  //   Direction:  R = rising, F = falling
+  //   Body-size:  s = small (<0.3 ATR), m = medium, l = large (>0.7 ATR)
+  //   Wick-flag:  U = upper wick dominant (>1.5× lower), L = lower wick dominant, N = balanced
+  // Result: 9-char code like "RlLFsNRmU"
   _fingerprint(candles, atr) {
     if (candles.length < 3 || atr <= 0) return '?';
     return candles.slice(-3).map(c => {
-      const dir  = c.close >= c.open ? 'R' : 'F';
-      const body = Math.abs(c.close - c.open);
-      const size = body < atr * 0.3 ? 's' : body < atr * 0.7 ? 'm' : 'l';
-      return dir + size;
+      const dir       = c.close >= c.open ? 'R' : 'F';
+      const body      = Math.abs(c.close - c.open);
+      const size      = body < atr * 0.3 ? 's' : body < atr * 0.7 ? 'm' : 'l';
+      const bodyTop   = Math.max(c.open, c.close);
+      const bodyBot   = Math.min(c.open, c.close);
+      const upperWick = c.high - bodyTop;
+      const lowerWick = bodyBot - c.low;
+      const wick      = upperWick > lowerWick * 1.5 ? 'U'
+                      : lowerWick > upperWick * 1.5 ? 'L' : 'N';
+      return dir + size + wick;
     }).join('');
   }
 
   // ── Resume pending checks after app restart ────────────────────────────────
   _resumePending() {
-    const now = Date.now();
+    const now  = Date.now();
     const kept = [];
     for (const check of (this.state.pendingChecks || [])) {
       const delay = (check.checkAt || 0) - now;
       if (delay <= 0) {
-        // Overdue — run immediately (with slight stagger to avoid API hammering)
         setTimeout(() => this._runOutcomeCheck(check), 2000 + Math.random() * 5000);
       } else {
         setTimeout(() => this._runOutcomeCheck(check), delay);
@@ -395,17 +539,18 @@ class Brain {
   getStats() {
     const total   = this.state.totalLearned;
     const wr      = total > 0 ? ((this.state.totalWins / total) * 100).toFixed(1) : '—';
+    const tp2Rate = total > 0 ? (((this.state.totalWinsFull || 0) / total) * 100).toFixed(1) : '—';
 
     // Top features by weight
     const featList = Object.entries(this.state.featureStats)
       .map(([feat, s]) => {
-        const t  = s.wins + s.losses;
+        const t = s.wins + s.losses;
         return {
           feat,
-          total: t,
-          wins:  s.wins,
+          total:  t,
+          wins:   s.wins,
           losses: s.losses,
-          wr:    t > 0 ? ((s.wins / t) * 100).toFixed(1) : '—',
+          wr:     t > 0 ? ((s.wins / t) * 100).toFixed(1) : '—',
           weight: this.getWeight(feat).toFixed(2),
         };
       })
@@ -421,22 +566,58 @@ class Brain {
       .filter(f => f.total >= 2)
       .sort((a, b) => parseFloat(b.wr) - parseFloat(a.wr));
 
+    // Improvement #4: session breakdown
+    const sessionList = Object.entries(this.state.sessionStats)
+      .map(([session, s]) => {
+        const t = s.wins + s.losses;
+        return {
+          session,
+          total:    t,
+          wins:     s.wins,
+          losses:   s.losses,
+          winsFull: s.winsFull || 0,
+          wr:       t > 0 ? ((s.wins / t) * 100).toFixed(1) : '—',
+        };
+      })
+      .sort((a, b) => parseFloat(b.wr || 0) - parseFloat(a.wr || 0));
+
+    // Improvement #6: confidence calibration — are high-confidence signals
+    // actually winning more than low-confidence ones?
+    const confList = ['50-60', '60-70', '70-80', '80-90', '90-100'].map(tier => {
+      const s = this.state.confidenceStats[tier] || { wins: 0, losses: 0, winsFull: 0 };
+      const t = s.wins + s.losses;
+      return {
+        tier,
+        total:    t,
+        wins:     s.wins,
+        losses:   s.losses,
+        winsFull: s.winsFull || 0,
+        wr:       t > 0 ? ((s.wins / t) * 100).toFixed(1) : '—',
+      };
+    });
+
     return {
-      totalLearned:   total,
-      totalWins:      this.state.totalWins,
-      totalLosses:    this.state.totalLosses,
-      overallWR:      wr,
-      pendingChecks:  this.state.pendingChecks.length,
-      topFeatures:    featList.slice(0, 8),
-      worstFeatures:  featList.slice(-5).reverse(),
-      topFingerprints: fpList.slice(0, 5),
-      totalWeighted:  Object.keys(this.state.weights).length,
+      totalLearned:     total,
+      totalWins:        this.state.totalWins,
+      totalLosses:      this.state.totalLosses,
+      totalWinsFull:    this.state.totalWinsFull || 0,
+      overallWR:        wr,
+      tp2Rate,
+      pendingChecks:    this.state.pendingChecks.length,
+      topFeatures:      featList.slice(0, 8),
+      worstFeatures:    featList.slice(-5).reverse(),
+      topFingerprints:  fpList.slice(0, 5),
+      totalWeighted:    Object.keys(this.state.weights).length,
+      sessionBreakdown: sessionList,
+      confidenceCalibration: confList,
+      comboCount:       Object.keys(this.state.comboStats).length,
     };
   }
 
   // ── Reset brain (clear all learned data) ──────────────────────────────────
   reset() {
     this.state = this._freshState();
+    this._weightsDirty = false;
     this._save();
     console.log('Brain: reset complete');
   }
@@ -444,7 +625,6 @@ class Brain {
   // ── localStorage persistence ───────────────────────────────────────────────
   _save() {
     try {
-      // Keep pendingChecks lean (strip full candle arrays if present)
       const toSave = { ...this.state, pendingChecks: (this.state.pendingChecks || []).slice(-20) };
       localStorage.setItem('cnax_brain_v1', JSON.stringify(toSave));
     } catch (e) {

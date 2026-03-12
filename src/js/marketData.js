@@ -37,36 +37,36 @@ const INSTRUMENTS = {
   'AVAXUSDT': { type: 'crypto', binance: 'AVAXUSDT', display: 'AVAX/USDT', pip: 0.01    },
 };
 
-const SEED_PRICES = {
-  EURUSD: 1.0842, GBPUSD: 1.2643, USDJPY: 149.85, GBPJPY: 189.60,
-  XAUUSD: 2385.0, AUDUSD: 0.6521, USDCAD: 1.3612,
-  EURJPY: 162.50, NZDUSD: 0.6015, USDCHF: 0.8950, EURCAD: 1.4720, GBPAUD: 1.9350,
-  ES: 5285, NQ: 18420, YM: 38950, RTY: 2050, CL: 78.4, GC: 2385, SI: 28.5, NG: 2.15,
-  MNQ: 18420, MES: 5285,
-  BTCUSDT: 68000, ETHUSDT: 3520, SOLUSDT: 182,
-  BNBUSDT: 580, XRPUSDT: 0.62, DOGEUSDT: 0.18, LINKUSDT: 18.5, AVAXUSDT: 38.0,
-};
 
-const SIM_VOLATILITY = {
-  EURUSD: 0.0004, GBPUSD: 0.0005, USDJPY: 0.0004, GBPJPY: 0.0006,
-  XAUUSD: 0.0008, AUDUSD: 0.0004, USDCAD: 0.0004,
-  EURJPY: 0.0005, NZDUSD: 0.0004, USDCHF: 0.0004, EURCAD: 0.0005, GBPAUD: 0.0006,
-  ES: 0.0025, NQ: 0.0035, YM: 0.0030, RTY: 0.0030, CL: 0.006, GC: 0.0025,
-  SI: 0.0030, NG: 0.010,
-  MNQ: 0.0035, MES: 0.0025,
-  BTCUSDT: 0.012, ETHUSDT: 0.014, SOLUSDT: 0.018,
-  BNBUSDT: 0.016, XRPUSDT: 0.020, DOGEUSDT: 0.025, LINKUSDT: 0.018, AVAXUSDT: 0.020,
+// ── Aletheia API — maps trading symbols to their closest liquid ETF proxy ─────
+// Futures → their benchmark ETF; gold/silver/oil → commodity ETFs.
+// Aletheia's StockData endpoint provides insider/institutional ownership,
+// short interest, and 50/200-day moving averages for these proxies.
+const ALETHEIA_ETF_MAP = {
+  'ES':  'SPY', 'MES': 'SPY',
+  'NQ':  'QQQ', 'MNQ': 'QQQ',
+  'YM':  'DIA', 'RTY': 'IWM',
+  'GC':  'GLD', 'XAUUSD': 'GLD',
+  'SI':  'SLV', 'CL': 'USO', 'NG': 'UNG',
+};
+// Crypto symbols mapped to Aletheia's Crypto endpoint tickers
+const ALETHEIA_CRYPTO_MAP = {
+  'BTCUSDT':  'BTC',  'ETHUSDT':  'ETH',  'SOLUSDT':  'SOL',
+  'XRPUSDT':  'XRP',  'DOGEUSDT': 'DOGE', 'BNBUSDT':  'BNB',
+  'LINKUSDT': 'LINK', 'AVAXUSDT': 'AVAX',
 };
 
 class MarketData {
   constructor() {
-    this.avApiKey  = '';
-    this.cache     = {};        // cacheKey -> { candles, ts }
-    this.cache1m   = {};        // symbol -> { candles[], ts }
-    this.inflight  = {};        // prevents duplicate concurrent fetches
-    this.prices    = {};        // symbol -> last price (live)
-    this.liveWs    = {};        // symbol -> WebSocket (crypto only)
-    this.listeners = {};        // symbol -> Set<callback>
+    this.avApiKey      = '';
+    this.aletheiaKey   = '';       // Aletheia API key (free — aletheiaapi.com)
+    this._aletheiaCache = {};      // ticker -> { data, ts }
+    this.cache     = {};           // cacheKey -> { candles, ts }
+    this.cache1m   = {};           // symbol -> { candles[], ts }
+    this.inflight  = {};           // prevents duplicate concurrent fetches
+    this.prices    = {};           // symbol -> last price (live)
+    this.liveWs    = {};           // symbol -> WebSocket (crypto only)
+    this.listeners = {};           // symbol -> Set<callback>
     this.CACHE_TTL    = 60 * 1000;   // 60s for hourly/daily candles
     this.CACHE_TTL_1M = 15 * 1000;   // 15s for 1m candles — nearly live
   }
@@ -78,6 +78,14 @@ class MarketData {
       // Clear all caches so next fetch uses the new key with live data
       this.cache   = {};
       this.cache1m = {};
+    }
+  }
+
+  setAletheiaKey(key) {
+    const trimmed = key.trim();
+    if (trimmed !== this.aletheiaKey) {
+      this.aletheiaKey    = trimmed;
+      this._aletheiaCache = {};   // invalidate cache on key change
     }
   }
 
@@ -524,37 +532,6 @@ class MarketData {
     return r.json();
   }
 
-  // ── Simulated candles fallback ────────────────────────────────────────────
-  _generateRealisticCandles(symbol, count, interval = '1h') {
-    const base    = SEED_PRICES[symbol] || 1.0;
-    const volFrac = SIM_VOLATILITY[symbol] || 0.001;
-    const tfScale = { '1m': 0.05, '5m': 0.12, '15m': 0.25, '1h': 1.0, '4h': 1.8, '1d': 3.5 }[interval] || 1.0;
-    const msPer   = { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000, '4h': 14400000, '1d': 86400000 }[interval] || 3600000;
-    const vol     = base * volFrac * tfScale;
-
-    let price = base;
-    const drift = (Math.random() - 0.5) * 0.0002;
-    const candles = [];
-    const now = Date.now();
-
-    for (let i = count; i >= 0; i--) {
-      const change = (Math.random() - 0.495 + drift) * vol;
-      const open   = price;
-      price        = Math.max(price * 0.95, price + change);
-      const wick   = Math.random() * vol * 0.4;
-      candles.push({
-        time:      now - i * msPer,
-        open:      parseFloat(open.toFixed(5)),
-        high:      parseFloat((Math.max(open, price) + wick).toFixed(5)),
-        low:       parseFloat((Math.min(open, price) - wick).toFixed(5)),
-        close:     parseFloat(price.toFixed(5)),
-        volume:    Math.floor(Math.random() * 5000) + 500,
-        simulated: true,
-      });
-    }
-    return candles;
-  }
-
   // ── Market hours ──────────────────────────────────────────────────────────
   static isEDT(now) {
     const year = now.getUTCFullYear(), m = now.getUTCMonth();
@@ -613,6 +590,156 @@ class MarketData {
   getPip(symbol)     { return INSTRUMENTS[symbol]?.pip || 0.0001; }
   getTickVal(symbol) { return INSTRUMENTS[symbol]?.tickVal || 10; }
   getDisplay(symbol) { return INSTRUMENTS[symbol]?.display || symbol; }
+
+  // ── Aletheia: GET with auth header ────────────────────────────────────────
+  async _fetchGet(url, headers = {}) {
+    if (window.electronAPI?.fetchGet) {
+      return window.electronAPI.fetchGet({ url, headers });
+    }
+    // Browser fallback (CORS may block — OK for development)
+    const r = await fetch(url, { headers });
+    return r.json();
+  }
+
+  // ── Aletheia: ETF/stock fundamental data (30-min cache) ─────────────────
+  // Returns { shortFloat, insiderPct, institutionPct, ma50, ma200, yearHigh, yearLow, beta }
+  async getAletheiaStockData(etfTicker) {
+    if (!this.aletheiaKey || !etfTicker) return null;
+    const cacheKey = `stock-${etfTicker}`;
+    const now = Date.now();
+    const cached = this._aletheiaCache[cacheKey];
+    if (cached && now - cached.ts < 30 * 60 * 1000) return cached.data;
+    try {
+      const data = await this._fetchGet(
+        `https://api.aletheiaapi.com/StockData?symbol=${etfTicker}&summary=true&statistics=true`,
+        { key: this.aletheiaKey }
+      );
+      if (!data || typeof data !== 'object' || data.error) return null;
+      const pf = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+      const result = {
+        shortFloat:    pf(data.ShortPercentOfFloat)         ?? 0,
+        insiderPct:    pf(data.PercentHeldByInsiders)       ?? 0,
+        institutionPct: pf(data.PercentHeldByInstitutions)  ?? 0,
+        ma50:          pf(data.MovingAverage50Day),
+        ma200:         pf(data.MovingAverage200Day),
+        yearHigh:      pf(data.YearHigh),
+        yearLow:       pf(data.YearLow),
+        beta:          pf(data.Beta) ?? 1,
+      };
+      this._aletheiaCache[cacheKey] = { data: result, ts: now };
+      return result;
+    } catch(e) {
+      console.warn(`Aletheia StockData[${etfTicker}]:`, e.message);
+      return null;
+    }
+  }
+
+  // ── Aletheia: crypto 52-week range (15-min cache) ─────────────────────────
+  // Returns { yearHigh, yearLow, price }
+  async getAletheiaCrypto(cryptoSym) {
+    if (!this.aletheiaKey || !cryptoSym) return null;
+    const cacheKey = `crypto-${cryptoSym}`;
+    const now = Date.now();
+    const cached = this._aletheiaCache[cacheKey];
+    if (cached && now - cached.ts < 15 * 60 * 1000) return cached.data;
+    try {
+      const data = await this._fetchGet(
+        `https://api.aletheiaapi.com/Crypto?symbol=${cryptoSym}`,
+        { key: this.aletheiaKey }
+      );
+      if (!data || typeof data !== 'object' || data.error) return null;
+      const pf = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+      const result = {
+        yearHigh: pf(data.YearHigh),
+        yearLow:  pf(data.YearLow),
+        price:    pf(data.Price),
+      };
+      this._aletheiaCache[cacheKey] = { data: result, ts: now };
+      return result;
+    } catch(e) {
+      console.warn(`Aletheia Crypto[${cryptoSym}]:`, e.message);
+      return null;
+    }
+  }
+
+  // ── Aletheia: unified fetch for any trading symbol ────────────────────────
+  // Auto-routes to StockData (futures via ETF) or Crypto endpoint.
+  // Returns { type: 'stock'|'crypto', ...fields } or null if no key / no mapping.
+  async getAletheiaData(symbol) {
+    if (!this.aletheiaKey) return null;
+    const etf    = ALETHEIA_ETF_MAP[symbol];
+    const crypto = ALETHEIA_CRYPTO_MAP[symbol];
+    if (etf)    { const d = await this.getAletheiaStockData(etf);  return d ? { type: 'stock',  ...d } : null; }
+    if (crypto) { const d = await this.getAletheiaCrypto(crypto);  return d ? { type: 'crypto', ...d } : null; }
+    return null;
+  }
+
+  // ── Crypto Open Interest + OI Change (Binance Futures, free, no key) ────────
+  // Rising OI + trend = fresh money entering = high conviction.
+  // Returns { openInterest, oiChange } where oiChange is % change vs 5 periods ago.
+  async getCryptoOpenInterest(symbol) {
+    const inst = INSTRUMENTS[symbol];
+    if (!inst || inst.type !== 'crypto') return null;
+    const cacheKey = `oi-${symbol}`;
+    const now = Date.now();
+    if (this._oiCache?.[cacheKey] && now - this._oiCache[cacheKey].ts < 5 * 60 * 1000)
+      return this._oiCache[cacheKey].data;
+    try {
+      const [current, hist] = await Promise.all([
+        this._fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${inst.binance}`),
+        this._fetch(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${inst.binance}&period=5m&limit=7`),
+      ]);
+      const currentOI = parseFloat(current?.openInterest ?? 0);
+      let oiChange = 0;
+      if (Array.isArray(hist) && hist.length >= 2) {
+        const prevOI = parseFloat(hist[0]?.sumOpenInterest ?? 0);
+        if (prevOI > 0) oiChange = (currentOI - prevOI) / prevOI;
+      }
+      const data = { openInterest: currentOI, oiChange };
+      if (!this._oiCache) this._oiCache = {};
+      this._oiCache[cacheKey] = { data, ts: now };
+      return data;
+    } catch(e) { return null; }
+  }
+
+  // ── Long/Short Ratio (Binance Futures, free, no key) ──────────────────────
+  // 0-1 where >0.5 = more longs, <0.5 = more shorts.
+  // Extreme readings (>0.70 or <0.30) are reliable contrarian signals.
+  async getLongShortRatio(symbol) {
+    const inst = INSTRUMENTS[symbol];
+    if (!inst || inst.type !== 'crypto') return null;
+    const cacheKey = `lsr-${symbol}`;
+    const now = Date.now();
+    if (this._lsrCache?.[cacheKey] && now - this._lsrCache[cacheKey].ts < 5 * 60 * 1000)
+      return this._lsrCache[cacheKey].ratio;
+    try {
+      const data = await this._fetch(
+        `https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${inst.binance}&period=5m&limit=1`
+      );
+      const ratio = parseFloat(Array.isArray(data) ? data[0]?.longAccount : data?.longAccount ?? 0.5);
+      if (!this._lsrCache) this._lsrCache = {};
+      this._lsrCache[cacheKey] = { ratio, ts: now };
+      return isNaN(ratio) ? null : ratio;
+    } catch(e) { return null; }
+  }
+
+  // ── Fear & Greed Index (alternative.me, free, no key) ────────────────────
+  // 0 = Extreme Fear (historically good buy), 100 = Extreme Greed (historically good sell).
+  // Updated daily. Cached for 1 hour since it's a slow-moving indicator.
+  async getFearGreedIndex() {
+    const now = Date.now();
+    if (this._fgCache && now - this._fgCache.ts < 60 * 60 * 1000) return this._fgCache.data;
+    try {
+      const data = await this._fetch('https://api.alternative.me/fng/?limit=1');
+      if (!data?.data?.[0]) return null;
+      const result = {
+        value: parseInt(data.data[0].value ?? 50),
+        label: data.data[0].value_classification || 'Neutral',
+      };
+      this._fgCache = { data: result, ts: now };
+      return result;
+    } catch(e) { return null; }
+  }
 
   // ── ICT Kill Zones ─────────────────────────────────────────────────────────
   // Returns the active TJR/ICT kill zone (time windows with highest probability setups)

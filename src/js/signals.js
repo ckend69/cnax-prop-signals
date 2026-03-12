@@ -619,11 +619,183 @@ class TechnicalAnalysis {
     const rangeLow  = Math.min(...slice.map(c => c.low));
     const mid       = (rangeHigh + rangeLow) / 2;
     const current   = candles[candles.length - 1].close;
-    const buffer    = (rangeHigh - rangeLow) * 0.05;  // 5% buffer around midline
+    const buffer    = (rangeHigh - rangeLow) * 0.05;
 
     if (current > mid + buffer)  return 'premium';
     if (current < mid - buffer)  return 'discount';
     return 'equilibrium';
+  }
+
+  // ── ADX — Average Directional Index (trend strength + direction) ───────────
+  // ADX measures how STRONG the trend is (regardless of direction).
+  // +DI > -DI = uptrend. -DI > +DI = downtrend. ADX < 20 = ranging/weak.
+  // Uses Wilder smoothing (same as ATR). Returns { adx, pdi, ndi }.
+  static adx(candles, period = 14) {
+    if (candles.length < period * 2 + 1) return { adx: 0, pdi: 0, ndi: 0 };
+    const dms = [];
+    for (let i = 1; i < candles.length; i++) {
+      const c = candles[i], p = candles[i - 1];
+      const upMove   = c.high - p.high;
+      const downMove = p.low  - c.low;
+      const tr = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
+      dms.push({
+        pdm: upMove > downMove && upMove > 0 ? upMove : 0,
+        ndm: downMove > upMove && downMove > 0 ? downMove : 0,
+        tr,
+      });
+    }
+    // Wilder smoothed sums
+    let sPDM = dms.slice(0, period).reduce((a, d) => a + d.pdm, 0);
+    let sNDM = dms.slice(0, period).reduce((a, d) => a + d.ndm, 0);
+    let sTR  = dms.slice(0, period).reduce((a, d) => a + d.tr,  0);
+    const dxArr = [];
+    for (let i = period; i < dms.length; i++) {
+      sPDM = sPDM - sPDM / period + dms[i].pdm;
+      sNDM = sNDM - sNDM / period + dms[i].ndm;
+      sTR  = sTR  - sTR  / period + dms[i].tr;
+      if (sTR === 0) continue;
+      const pdi = (sPDM / sTR) * 100;
+      const ndi = (sNDM / sTR) * 100;
+      const dx  = (pdi + ndi) > 0 ? Math.abs(pdi - ndi) / (pdi + ndi) * 100 : 0;
+      dxArr.push({ pdi, ndi, dx });
+    }
+    if (dxArr.length < period) return { adx: 0, pdi: 0, ndi: 0 };
+    let adxVal = dxArr.slice(0, period).reduce((a, d) => a + d.dx, 0) / period;
+    for (let i = period; i < dxArr.length; i++) adxVal = (adxVal * (period - 1) + dxArr[i].dx) / period;
+    const last = dxArr[dxArr.length - 1];
+    return { adx: parseFloat(adxVal.toFixed(2)), pdi: parseFloat(last.pdi.toFixed(2)), ndi: parseFloat(last.ndi.toFixed(2)) };
+  }
+
+  // ── Supertrend — dynamic trailing support/resistance ──────────────────────
+  // Above supertrend = bullish regime. Below = bearish. Widely used by prop traders.
+  // Returns { direction: 'bullish'|'bearish', level }
+  static supertrend(candles, period = 10, multiplier = 3.0) {
+    if (candles.length < period + 5) return { direction: 'none', level: null };
+    const trs = [];
+    for (let i = 1; i < candles.length; i++) {
+      const c = candles[i], p = candles[i - 1];
+      trs.push(Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close)));
+    }
+    let atr = trs.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    const atrs = [atr];
+    for (let i = period; i < trs.length; i++) { atr = (atr * (period - 1) + trs[i]) / period; atrs.push(atr); }
+
+    let upperBand = 0, lowerBand = 0, prevDir = 1, prevST = null;
+    // atrs[i] is the EMA-ATR at candle index (period + i); use correct offsets throughout.
+    for (let i = 0; i < atrs.length; i++) {
+      const ci  = candles[period + i];                 // current bar for this ATR value
+      const hl2 = (ci.high + ci.low) / 2;
+      const bUp  = hl2 + multiplier * atrs[i];
+      const bLow = hl2 - multiplier * atrs[i];
+      if (prevST === null) {
+        // First bar: initialise bands directly (no previous close to compare against).
+        upperBand = bUp;
+        lowerBand = bLow;
+      } else {
+        const prevClose = candles[period + i - 1].close;
+        upperBand = (bUp < upperBand || prevClose > upperBand) ? bUp : upperBand;
+        lowerBand = (bLow > lowerBand || prevClose < lowerBand) ? bLow : lowerBand;
+      }
+      const dir  = (prevST === null || prevDir === -1) ? (ci.close <= upperBand ? -1 : 1)
+                                                       : (ci.close >= lowerBand ?  1 : -1);
+      prevST  = dir === 1 ? lowerBand : upperBand;
+      prevDir = dir;
+    }
+    return { direction: prevDir === 1 ? 'bullish' : 'bearish', level: prevST };
+  }
+
+  // ── Pivot Points (classic) — institutional daily S/R levels ───────────────
+  // Uses first 60% of candles as the "prior period" to compute pivot, R1/R2/S1/S2.
+  // These are widely watched by institutions and floor traders.
+  static pivotPoints(candles) {
+    if (candles.length < 30) return null;
+    const prev = candles.slice(0, Math.floor(candles.length * 0.6));
+    const H  = Math.max(...prev.map(c => c.high));
+    const L  = Math.min(...prev.map(c => c.low));
+    const C  = prev[prev.length - 1].close;
+    const P  = (H + L + C) / 3;
+    return { P, R1: 2*P - L, R2: P + (H - L), S1: 2*P - H, S2: P - (H - L) };
+  }
+
+  // ── OBV — On-Balance Volume + divergence detection ────────────────────────
+  // OBV accumulates volume on up-bars and subtracts on down-bars.
+  // Divergence: price makes new extreme but OBV doesn't confirm = smart money disagreeing.
+  static obv(candles) {
+    if (candles.length < 5) return [];
+    const result = [0];
+    for (let i = 1; i < candles.length; i++) {
+      const prev = result[result.length - 1];
+      const vol  = candles[i].volume || 1;
+      if      (candles[i].close > candles[i-1].close) result.push(prev + vol);
+      else if (candles[i].close < candles[i-1].close) result.push(prev - vol);
+      else                                              result.push(prev);
+    }
+    return result;
+  }
+
+  static obvDivergence(candles, lookback = 25) {
+    const obvArr = this.obv(candles);
+    if (obvArr.length < lookback + 5) return 'none';
+    const prices     = candles.map(c => c.close);
+    const priceSlice = prices.slice(-lookback);
+    const obvSlice   = obvArr.slice(-lookback);
+    const half       = Math.floor(lookback / 2);
+    const priceLow   = Math.min(...priceSlice.slice(-half));
+    const priceLowOld= Math.min(...priceSlice.slice(0, half));
+    const priceHigh  = Math.max(...priceSlice.slice(-half));
+    const priceHighOld=Math.max(...priceSlice.slice(0, half));
+    const obvLow     = Math.min(...obvSlice.slice(-half));
+    const obvLowOld  = Math.min(...obvSlice.slice(0, half));
+    const obvHigh    = Math.max(...obvSlice.slice(-half));
+    const obvHighOld = Math.max(...obvSlice.slice(0, half));
+    // Bullish: price lower low but OBV higher low = accumulation underway
+    if (priceLow < priceLowOld * 0.9999 && obvLow > obvLowOld) return 'bullish';
+    // Bearish: price higher high but OBV lower high = distribution underway
+    if (priceHigh > priceHighOld * 1.0001 && obvHigh < obvHighOld) return 'bearish';
+    return 'none';
+  }
+
+  // ── Ichimoku Cloud ─────────────────────────────────────────────────────────
+  // The cloud (Kumo) acts as dynamic support/resistance with institutional weight.
+  // Tenkan/Kijun cross is the primary entry signal. Cloud position is the bias filter.
+  // Returns null if not enough data (needs 52+ bars).
+  static ichimoku(candles) {
+    if (candles.length < 52) return null;
+    const rangeHL = (n) => {
+      const sl = candles.slice(-n);
+      return { h: Math.max(...sl.map(c => c.high)), l: Math.min(...sl.map(c => c.low)) };
+    };
+    const t9  = rangeHL(9);
+    const k26 = rangeHL(26);
+    const s52 = rangeHL(52);
+    const tenkan  = (t9.h  + t9.l)  / 2;   // Conversion line (fast)
+    const kijun   = (k26.h + k26.l) / 2;   // Base line (slow)
+    const senkouA = (tenkan + kijun) / 2;   // Cloud top/bottom A
+    const senkouB = (s52.h  + s52.l) / 2;  // Cloud top/bottom B
+    const cur     = candles[candles.length - 1].close;
+    const cloudHi = Math.max(senkouA, senkouB);
+    const cloudLo = Math.min(senkouA, senkouB);
+    return {
+      tenkan, kijun, senkouA, senkouB,
+      aboveCloud:  cur > cloudHi,
+      belowCloud:  cur < cloudLo,
+      inCloud:     cur >= cloudLo && cur <= cloudHi,
+      tkBull:      tenkan > kijun,   // Tenkan crossed above Kijun
+      tkBear:      tenkan < kijun,
+    };
+  }
+
+  // ── Williams %R ──────────────────────────────────────────────────────────
+  // Oscillator in range [-100, 0]. Below -80 = oversold, above -20 = overbought.
+  // Confirms or contradicts RSI/Stochastic for overbought/oversold conditions.
+  static williamsR(candles, period = 14) {
+    if (candles.length < period) return -50;
+    const slice  = candles.slice(-period);
+    const highMax = Math.max(...slice.map(c => c.high));
+    const lowMin  = Math.min(...slice.map(c => c.low));
+    const last    = candles[candles.length - 1].close;
+    if (highMax === lowMin) return -50;
+    return ((highMax - last) / (highMax - lowMin)) * -100;
   }
 }
 
@@ -633,12 +805,18 @@ class SignalEngine {
     this.lastSignals = {};   // symbol -> { direction, ts }
     // Max possible raw score before brain bonuses.
     // Classic TA:  EMA(30) + 200EMA(5) + RSI(20) + MACD(20) + BB(10) + Stoch(5)
-    //              + Volume(10) + Levels(5) + HTF(8) = 113
+    //              + Volume(10) + Levels(5) + HTF(8) + WilliamsR(5) = 118
     // Patterns:    Engulfing(25) + PinBar(20) + RSIDiv(15) + DblTop(15) + Doji@BB(10) = 85
     // TJR / SMC:   OrderBlock(20) + FVG(15) + LiqSweep(18) + CHoCH(15) + PremDisc(8) = 76
-    // New (v3):    KillZone(15) + VWAP(8) + FibOTE(18) + PO3(20) + Funding(12) + CurrStr(10) = 83
-    // Total = 357 pts max (brain bonuses are additive on top of this)
-    this.MAX_SCORE = 357;
+    // v3:          KillZone(15) + VWAP(8) + FibOTE(18) + PO3(20) + Funding(12) + CurrStr(10) = 83
+    // Aletheia:    ShortSqueeze(12) + Insider(8) + GoldCross(10) + 52wk(8) + Instit(6) = 44
+    // New (v4):    ADX(20) + Supertrend(12) + Pivots(12) + OBV Div(15) + Ichimoku(18) = 77
+    // Sentiment:   FearGreed(12) + OpenInterest(10) + LongShortRatio(10) = 32
+    // ── MAX_SCORE calibrated so realistic strong setups land 70-90% ─────────
+    // Theoretical absolute max ~515 pts — no real signal ever fires all at once.
+    // 260 keeps percentages meaningful:
+    //   Moderate (100-130 pts) → 38-50%  |  Good (160-200) → 62-77%  |  Great (200+) → 77-100%
+    this.MAX_SCORE = 260;
   }
 
   // ── Core signal generator: 1m primary, 5m context, brain-weighted ──────────
@@ -790,6 +968,112 @@ class SignalEngine {
       const pts = Math.round(5 * w('stoch_overbought'));
       bearScore += pts; bearFeatures.push('stoch_overbought');
       reasons.push(`Stochastic overbought (${stoch.toFixed(1)})`);
+    }
+
+    // ── Williams %R (max 5 pts) — second oscillator confirmation ─────────
+    const willR = TechnicalAnalysis.williamsR(candles, 14);
+    if (willR < -80) {
+      const pts = Math.round(5 * w('willr_oversold'));
+      bullScore += pts; bullFeatures.push('willr_oversold');
+      reasons.push(`Williams %R oversold (${willR.toFixed(1)}) — triple oscillator confluence`);
+    } else if (willR > -20) {
+      const pts = Math.round(5 * w('willr_overbought'));
+      bearScore += pts; bearFeatures.push('willr_overbought');
+      reasons.push(`Williams %R overbought (${willR.toFixed(1)}) — triple oscillator confluence`);
+    }
+
+    // ── ADX — Trend Strength + Direction (max 20 pts) ─────────────────────
+    // ADX < 20: ranging market → suppress weak signals to reduce false entries
+    // ADX ≥ 25 + directional confirmation = significant trend bonus
+    const adxData = TechnicalAnalysis.adx(candles, 14);
+    if (adxData.adx < 20 && adxData.adx > 0) {
+      // Ranging market: penalise both sides equally so minConf filters weak setups
+      const penalty = Math.round(8 * (1 - adxData.adx / 20));
+      bullScore -= penalty; bearScore -= penalty;
+      reasons.push(`ADX ${adxData.adx.toFixed(1)} — ranging/weak trend, reduced confidence`);
+    } else if (adxData.adx >= 25) {
+      const strong = adxData.adx >= 35;
+      if (adxData.pdi > adxData.ndi && bullScore >= bearScore) {
+        const pts = Math.round((strong ? 20 : 12) * w('adx_trend_bull'));
+        bullScore += pts; bullFeatures.push('adx_trend_bull');
+        reasons.push(`ADX ${adxData.adx.toFixed(1)} — ${strong ? 'strong' : 'confirmed'} uptrend (+DI ${adxData.pdi.toFixed(1)} > -DI ${adxData.ndi.toFixed(1)})`);
+      } else if (adxData.ndi > adxData.pdi && bearScore > bullScore) {
+        const pts = Math.round((strong ? 20 : 12) * w('adx_trend_bear'));
+        bearScore += pts; bearFeatures.push('adx_trend_bear');
+        reasons.push(`ADX ${adxData.adx.toFixed(1)} — ${strong ? 'strong' : 'confirmed'} downtrend (-DI ${adxData.ndi.toFixed(1)} > +DI ${adxData.pdi.toFixed(1)})`);
+      }
+    }
+
+    // ── Supertrend (max 12 pts) — dynamic trailing support/resistance ────
+    const st = TechnicalAnalysis.supertrend(candles, 10, 3.0);
+    if (st.direction === 'bullish' && bullScore >= bearScore) {
+      const pts = Math.round(12 * w('supertrend_bull'));
+      bullScore += pts; bullFeatures.push('supertrend_bull');
+      reasons.push(`Supertrend bullish — price above dynamic support ${st.level?.toFixed(4) ?? ''}`);
+    } else if (st.direction === 'bearish' && bearScore > bullScore) {
+      const pts = Math.round(12 * w('supertrend_bear'));
+      bearScore += pts; bearFeatures.push('supertrend_bear');
+      reasons.push(`Supertrend bearish — price below dynamic resistance ${st.level?.toFixed(4) ?? ''}`);
+    }
+
+    // ── Pivot Points (max 12 pts) — institutional S/R levels ─────────────
+    // Classic daily pivot levels watched by floor traders and institutional desks.
+    const pivots = TechnicalAnalysis.pivotPoints(candles);
+    if (pivots && atr > 0) {
+      const distS1 = Math.abs(current - pivots.S1) / atr;
+      const distS2 = Math.abs(current - pivots.S2) / atr;
+      const distR1 = Math.abs(current - pivots.R1) / atr;
+      const distR2 = Math.abs(current - pivots.R2) / atr;
+      if ((distS1 < 1.2 || distS2 < 1.2) && bullScore >= bearScore) {
+        const useS2 = distS2 < distS1;
+        const pts   = Math.round((useS2 ? 12 : 8) * w('pivot_support'));
+        bullScore += pts; bullFeatures.push('pivot_support');
+        reasons.push(`Near pivot ${useS2 ? 'S2' : 'S1'} at ${(useS2 ? pivots.S2 : pivots.S1).toFixed(4)} — institutional support level`);
+      } else if ((distR1 < 1.2 || distR2 < 1.2) && bearScore > bullScore) {
+        const useR2 = distR2 < distR1;
+        const pts   = Math.round((useR2 ? 12 : 8) * w('pivot_resistance'));
+        bearScore += pts; bearFeatures.push('pivot_resistance');
+        reasons.push(`Near pivot ${useR2 ? 'R2' : 'R1'} at ${(useR2 ? pivots.R2 : pivots.R1).toFixed(4)} — institutional resistance level`);
+      }
+    }
+
+    // ── OBV Divergence (max 15 pts) — volume confirms or contradicts price ─
+    // Smart money disagreement with price = the single most reliable divergence.
+    const obvDiv = TechnicalAnalysis.obvDivergence(candles, 25);
+    if (obvDiv === 'bullish') {
+      const pts = Math.round(15 * w('obv_div_bull'));
+      bullScore += pts; bullFeatures.push('obv_div_bull');
+      reasons.push('Bullish OBV divergence — volume accumulating while price falls (smart money buying)');
+    } else if (obvDiv === 'bearish') {
+      const pts = Math.round(15 * w('obv_div_bear'));
+      bearScore += pts; bearFeatures.push('obv_div_bear');
+      reasons.push('Bearish OBV divergence — volume distributing while price rises (smart money selling)');
+    }
+
+    // ── Ichimoku Cloud (max 18 pts) — institutional trend framework ────────
+    // Cloud position = macro bias (10 pts). Tenkan/Kijun cross = timing signal (8 pts).
+    const ichi = TechnicalAnalysis.ichimoku(candles);
+    if (ichi) {
+      if (ichi.aboveCloud) {
+        const pts = Math.round(10 * w('ichimoku_cloud_bull'));
+        bullScore += pts; bullFeatures.push('ichimoku_cloud_bull');
+        reasons.push('Price above Ichimoku cloud (Kumo) — strong bullish macro bias');
+      } else if (ichi.belowCloud) {
+        const pts = Math.round(10 * w('ichimoku_cloud_bear'));
+        bearScore += pts; bearFeatures.push('ichimoku_cloud_bear');
+        reasons.push('Price below Ichimoku cloud (Kumo) — strong bearish macro bias');
+      } else {
+        reasons.push('Price inside Ichimoku cloud — indecision zone, lower conviction');
+      }
+      if (ichi.tkBull && (ichi.aboveCloud || bullScore >= bearScore)) {
+        const pts = Math.round(8 * w('ichimoku_tk_bull'));
+        bullScore += pts; bullFeatures.push('ichimoku_tk_bull');
+        reasons.push('Ichimoku Tenkan > Kijun — short-term momentum turned bullish');
+      } else if (ichi.tkBear && (ichi.belowCloud || bearScore > bullScore)) {
+        const pts = Math.round(8 * w('ichimoku_tk_bear'));
+        bearScore += pts; bearFeatures.push('ichimoku_tk_bear');
+        reasons.push('Ichimoku Tenkan < Kijun — short-term momentum turned bearish');
+      }
     }
 
     // ── Volume (max 10 pts) ───────────────────────────────────────────────
@@ -1088,6 +1372,68 @@ class SignalEngine {
       }
     }
 
+    // ── Fear & Greed Index (max 12 pts, crypto only) ──────────────────────
+    // alternative.me Fear & Greed: 0=Extreme Fear, 100=Extreme Greed
+    // Extreme readings are strong contrarian signals for crypto.
+    const fearGreed = options.fearGreed ?? null;
+    if (fearGreed && inst?.type === 'crypto') {
+      const fgv = fearGreed.value;
+      if (fgv <= 15) {
+        const pts = Math.round(12 * w('fear_greed_fear'));
+        bullScore += pts; bullFeatures.push('fear_greed_fear');
+        reasons.push(`Extreme Fear (${fgv}/100) — historically strong contrarian crypto buy signal`);
+      } else if (fgv >= 85) {
+        const pts = Math.round(12 * w('fear_greed_greed'));
+        bearScore += pts; bearFeatures.push('fear_greed_greed');
+        reasons.push(`Extreme Greed (${fgv}/100) — historically strong contrarian crypto sell signal`);
+      } else if (fgv <= 30 && bullScore >= bearScore) {
+        const pts = Math.round(6 * w('fear_greed_fear'));
+        bullScore += pts; bullFeatures.push('fear_greed_fear');
+        reasons.push(`Fear sentiment (${fgv}/100) — supportive of long crypto positions`);
+      } else if (fgv >= 70 && bearScore > bullScore) {
+        const pts = Math.round(6 * w('fear_greed_greed'));
+        bearScore += pts; bearFeatures.push('fear_greed_greed');
+        reasons.push(`Greed sentiment (${fgv}/100) — supportive of short crypto positions`);
+      }
+    }
+
+    // ── Open Interest (max 10 pts, crypto only) ────────────────────────────
+    // Rising OI + trend direction = fresh money entering = strong conviction signal.
+    // Falling OI = position unwinding = weakening trend, penalty applied.
+    const oiData = options.openInterest ?? null;
+    if (oiData && inst?.type === 'crypto') {
+      const { oiChange } = oiData;
+      if (oiChange > 0.015 && bullScore >= bearScore) {
+        const pts = Math.round(10 * w('oi_rising_bull'));
+        bullScore += pts; bullFeatures.push('oi_rising_bull');
+        reasons.push(`Open interest +${(oiChange * 100).toFixed(1)}% — fresh capital entering longs (strong conviction)`);
+      } else if (oiChange > 0.015 && bearScore > bullScore) {
+        const pts = Math.round(10 * w('oi_rising_bear'));
+        bearScore += pts; bearFeatures.push('oi_rising_bear');
+        reasons.push(`Open interest +${(oiChange * 100).toFixed(1)}% — fresh capital entering shorts (strong conviction)`);
+      } else if (oiChange < -0.015) {
+        bullScore -= 5; bearScore -= 5;
+        reasons.push(`Open interest ${(oiChange * 100).toFixed(1)}% — positions unwinding, reduced conviction`);
+      }
+    }
+
+    // ── Long/Short Ratio (max 10 pts, crypto only) ─────────────────────────
+    // Extreme retail crowding is a strong contrarian indicator.
+    // >70% longs = everyone is long = short squeeze fuel exhausted = bearish.
+    // <30% longs = everyone is short = short covering rally likely = bullish.
+    const lsRatio = options.lsRatio ?? null;
+    if (lsRatio !== null && inst?.type === 'crypto') {
+      if (lsRatio < 0.30 && bullScore >= bearScore) {
+        const pts = Math.round(10 * w('ls_ratio_bull'));
+        bullScore += pts; bullFeatures.push('ls_ratio_bull');
+        reasons.push(`${(lsRatio * 100).toFixed(0)}% longs — extreme short crowding, contrarian long bias`);
+      } else if (lsRatio > 0.70 && bearScore > bullScore) {
+        const pts = Math.round(10 * w('ls_ratio_bear'));
+        bearScore += pts; bearFeatures.push('ls_ratio_bear');
+        reasons.push(`${(lsRatio * 100).toFixed(0)}% longs — extreme long crowding, contrarian short bias`);
+      }
+    }
+
     // ── News suppression — penalise if high-impact event imminent ─────────
     const newsEvents = options.newsEvents ?? [];
     const relevantNews = newsEvents.filter(e => {
@@ -1101,6 +1447,108 @@ class SignalEngine {
       const penalty = ev.minutesAway <= 5 ? 25 : 12;
       bullScore -= penalty; bearScore -= penalty;  // penalise both sides
       reasons.push(`⚠ ${ev.title} (${ev.currency}) in ~${Math.max(0, ev.minutesAway)} min — reduced confidence`);
+    }
+
+    // ── Aletheia Fundamental Context ──────────────────────────────────────
+    // Adds institutional/fundamental signals not available from price data alone.
+    // Requires aletheiaKey set in settings. Gracefully no-ops if unavailable.
+    const aletheiaData = options.aletheiaData ?? null;
+    if (aletheiaData) {
+      if (aletheiaData.type === 'stock') {
+        // Short float squeeze (max 12 pts): very high short interest + bullish = squeeze fuel
+        const sf = aletheiaData.shortFloat || 0;
+        if (sf > 0.15 && bullScore >= bearScore) {
+          const pts = Math.round(12 * w('aletheia_short_squeeze'));
+          bullScore += pts; bullFeatures.push('aletheia_short_squeeze');
+          reasons.push(`Short float ${(sf * 100).toFixed(1)}% — elevated short squeeze potential`);
+        } else if (sf > 0.08 && bearScore > bullScore) {
+          const pts = Math.round(6 * w('aletheia_short_crowd'));
+          bearScore += pts; bearFeatures.push('aletheia_short_crowd');
+          reasons.push(`Short float ${(sf * 100).toFixed(1)}% — crowded short positioning`);
+        }
+
+        // Insider ownership (max 8 pts): high insider % = management confidence in upside
+        const ip = aletheiaData.insiderPct || 0;
+        if (ip > 0.05 && bullScore >= bearScore) {
+          const pts = Math.round(8 * w('aletheia_insider'));
+          bullScore += pts; bullFeatures.push('aletheia_insider');
+          reasons.push(`Insider ownership ${(ip * 100).toFixed(1)}% — management aligned with upside`);
+        }
+
+        // 50/200-day MA cross (max 10 pts): institutional trend confirmation
+        const { ma50, ma200 } = aletheiaData;
+        if (ma50 && ma200 && ma50 > 0 && ma200 > 0) {
+          if (ma50 > ma200) {
+            if (bullScore >= bearScore) {
+              const pts = Math.round(10 * w('aletheia_golden_cross'));
+              bullScore += pts; bullFeatures.push('aletheia_golden_cross');
+              reasons.push(`ETF 50-day MA > 200-day MA — institutional golden cross context`);
+            }
+          } else {
+            if (bearScore > bullScore) {
+              const pts = Math.round(10 * w('aletheia_death_cross'));
+              bearScore += pts; bearFeatures.push('aletheia_death_cross');
+              reasons.push(`ETF 50-day MA < 200-day MA — institutional death cross context`);
+            }
+          }
+        }
+
+        // 52-week range positioning (max 8 pts): mean-reversion from extremes
+        const { yearHigh: yH, yearLow: yL } = aletheiaData;
+        if (yH && yL && yH > yL) {
+          const pctOfRange = (current - yL) / (yH - yL);
+          if (pctOfRange < 0.15 && bullScore >= bearScore) {
+            const pts = Math.round(8 * w('aletheia_52wk_low'));
+            bullScore += pts; bullFeatures.push('aletheia_52wk_low');
+            reasons.push(`ETF near 52-week low (bottom ${(pctOfRange * 100).toFixed(0)}% of range) — deep value zone`);
+          } else if (pctOfRange > 0.85 && bearScore > bullScore) {
+            const pts = Math.round(8 * w('aletheia_52wk_high'));
+            bearScore += pts; bearFeatures.push('aletheia_52wk_high');
+            reasons.push(`ETF near 52-week high (top ${((1 - pctOfRange) * 100).toFixed(0)}% of range) — extended zone`);
+          }
+        }
+
+        // Institutional ownership (max 6 pts): high institution % = strong-hand backing
+        const instPct = aletheiaData.institutionPct || 0;
+        if (instPct > 0.65 && bullScore >= bearScore) {
+          const pts = Math.round(6 * w('aletheia_institution'));
+          bullScore += pts; bullFeatures.push('aletheia_institution');
+          reasons.push(`${(instPct * 100).toFixed(0)}% institutional ownership — strong-hand backing supports longs`);
+        }
+
+        // Beta-scaled signal (informational): high beta in trending market amplifies moves
+        // High beta (>1.5) = more volatile → widen stops implicitly via the ATR calculation.
+        // We add a small bonus when beta confirms the trend direction (high beta in strong ADX)
+        const beta = aletheiaData.beta || 1;
+        if (beta > 1.4 && adxData.adx >= 25) {
+          if (bullScore >= bearScore) {
+            const pts = Math.round(4 * w('aletheia_high_beta'));
+            bullScore += pts; bullFeatures.push('aletheia_high_beta');
+            reasons.push(`Beta ${beta.toFixed(2)} — high-beta instrument amplifies upside in strong trend (ADX ${adxData.adx.toFixed(1)})`);
+          } else {
+            const pts = Math.round(4 * w('aletheia_high_beta'));
+            bearScore += pts; bearFeatures.push('aletheia_high_beta');
+            reasons.push(`Beta ${beta.toFixed(2)} — high-beta instrument amplifies downside in strong trend`);
+          }
+        }
+      }
+
+      if (aletheiaData.type === 'crypto') {
+        // 52-week range for crypto (max 8 pts): historical support/resistance awareness
+        const { yearHigh: yH, yearLow: yL } = aletheiaData;
+        if (yH && yL && yH > yL) {
+          const pctOfRange = (current - yL) / (yH - yL);
+          if (pctOfRange < 0.20 && bullScore >= bearScore) {
+            const pts = Math.round(8 * w('aletheia_crypto_52wk_low'));
+            bullScore += pts; bullFeatures.push('aletheia_crypto_52wk_low');
+            reasons.push(`Crypto near 52-week low (${(pctOfRange * 100).toFixed(0)}% of range) — historically strong support`);
+          } else if (pctOfRange > 0.80 && bearScore > bullScore) {
+            const pts = Math.round(8 * w('aletheia_crypto_52wk_high'));
+            bearScore += pts; bearFeatures.push('aletheia_crypto_52wk_high');
+            reasons.push(`Crypto near 52-week high (${(pctOfRange * 100).toFixed(0)}% of range) — historically strong resistance`);
+          }
+        }
+      }
     }
 
     // ── Brain bonuses (applied after all manual indicators) ────────────────
@@ -1131,8 +1579,10 @@ class SignalEngine {
     const baseConf   = Math.round((winScore / this.MAX_SCORE) * 100);
     const confidence = Math.max(0, Math.min(100, baseConf + learnAdj));
 
-    // Minimum threshold — 1m requires fewer indicators (less history) so threshold is 50%
-    const minConf = is1m ? 50 : 55;
+    // Minimum threshold — internal gate before UI-level minConf filter
+    // 1m needs fewer historical bars so we allow a lower floor.
+    // With MAX_SCORE=200: 38% = 76 pts (3-4 indicators), 45% = 90 pts (several aligning).
+    const minConf = is1m ? 38 : 45;
     if (confidence < minConf) return null;
 
     // ── ATR-adaptive SL/TP (tighter for 1m scalp trades) ──────────────────
@@ -1193,6 +1643,25 @@ class SignalEngine {
     if (po3.phase === 'distribution')   patterns.push(po3.direction === 'bullish' ? 'PO3 ▲'  : 'PO3 ▼');
     if (po3.phase === 'accumulation')   patterns.push('PO3 Accum');
     if (relevantNews.length > 0)        patterns.push('⚠ News');
+    // v4 new indicator chips
+    if (adxData.adx >= 25) patterns.push(`ADX ${adxData.adx.toFixed(0)}`);
+    if (st.direction !== 'none') patterns.push(st.direction === 'bullish' ? 'Supertrend ▲' : 'Supertrend ▼');
+    if (obvDiv !== 'none')      patterns.push(obvDiv === 'bullish' ? 'OBV Div ▲' : 'OBV Div ▼');
+    if (ichi) {
+      if (ichi.aboveCloud)  patterns.push('Kumo ▲');
+      else if (ichi.belowCloud) patterns.push('Kumo ▼');
+    }
+    if (fearGreed && fearGreed.value <= 20) patterns.push('😨 Extreme Fear');
+    else if (fearGreed && fearGreed.value >= 80) patterns.push('🤑 Extreme Greed');
+    if (oiData && oiData.oiChange > 0.015) patterns.push('OI Rising ↑');
+    // Aletheia chips
+    if (aletheiaData?.type === 'stock') {
+      if ((aletheiaData.shortFloat || 0) > 0.15 && direction === 'BUY') patterns.push('Short Squeeze ⚡');
+      if (aletheiaData.ma50 && aletheiaData.ma200) {
+        if (aletheiaData.ma50 > aletheiaData.ma200 && direction === 'BUY')  patterns.push('Golden Cross');
+        if (aletheiaData.ma50 < aletheiaData.ma200 && direction === 'SELL') patterns.push('Death Cross');
+      }
+    }
 
     // ── Signal object ──────────────────────────────────────────────────────
     const timeframeLabel = is1m ? '1m' : (is5m ? '5m' : '1H');
@@ -1243,11 +1712,13 @@ class SignalEngine {
   // ── Batch scan — crypto in parallel, forex/futures in small batches ────────
   async scanAll(symbols) {
     // Pre-fetch shared context once per scan cycle (reduces API calls)
-    const [currencyStrengths, newsEvents] = await Promise.all([
+    // Fetch shared context once per cycle (Fear & Greed is global, not per-symbol)
+    const [currencyStrengths, newsEvents, fearGreed] = await Promise.all([
       window.marketData.getCurrencyStrengths().catch(() => null),
       window.marketData.getUpcomingHighImpactEvents().catch(() => []),
+      window.marketData.getFearGreedIndex?.().catch(() => null) ?? Promise.resolve(null),
     ]);
-    const sharedCtx = { currencyStrengths, newsEvents };
+    const sharedCtx = { currencyStrengths, newsEvents, fearGreed };
 
     if (newsEvents.length > 0) {
       console.log(`Brain: ${newsEvents.length} high-impact news event(s) upcoming:`,
@@ -1263,14 +1734,14 @@ class SignalEngine {
       if (o.status === 'fulfilled' && o.value) results.push(o.value);
     }
 
-    const BATCH = 3;
+    const BATCH = 5;
     for (let i = 0; i < others.length; i += BATCH) {
       const batch   = others.slice(i, i + BATCH);
       const settled = await Promise.allSettled(batch.map(s => this._scanOne(s, sharedCtx)));
       for (const o of settled) {
         if (o.status === 'fulfilled' && o.value) results.push(o.value);
       }
-      if (i + BATCH < others.length) await new Promise(r => setTimeout(r, 600));
+      if (i + BATCH < others.length) await new Promise(r => setTimeout(r, 400));
     }
 
     return results.sort((a, b) => b.confidence - a.confidence);
@@ -1289,16 +1760,32 @@ class SignalEngine {
       // Aggregate 5m bars from 1m for higher-timeframe context (no extra API call)
       const candles5m = window.marketData._aggregate1mto5m(candles1m, 60);
 
-      // Funding rate — only for crypto
-      const fundingRate = window.INSTRUMENTS?.[sym]?.type === 'crypto'
-        ? await window.marketData.getFundingRate(sym).catch(() => null)
+      const isCrypto = window.INSTRUMENTS?.[sym]?.type === 'crypto';
+
+      // Crypto-specific data (all free, no API key needed)
+      const [fundingRate, openInterest, lsRatio] = isCrypto
+        ? await Promise.all([
+            window.marketData.getFundingRate(sym).catch(() => null),
+            window.marketData.getCryptoOpenInterest?.(sym).catch(() => null) ?? Promise.resolve(null),
+            window.marketData.getLongShortRatio?.(sym).catch(() => null)     ?? Promise.resolve(null),
+          ])
+        : [null, null, null];
+
+      // Aletheia fundamental context (institutional/ownership data, 52-week range)
+      // Fires only when aletheiaKey is set; fails gracefully with null
+      const aletheiaData = window.marketData.aletheiaKey
+        ? await window.marketData.getAletheiaData(sym).catch(() => null)
         : null;
 
       return await this.generateSignal(sym, candles1m, candles5m, {
         timeframe:         '1m',
         fundingRate,
+        openInterest,
+        lsRatio,
+        fearGreed:         sharedCtx.fearGreed         ?? null,
         currencyStrengths: sharedCtx.currencyStrengths ?? null,
         newsEvents:        sharedCtx.newsEvents        ?? [],
+        aletheiaData,
       });
     } catch(e) {
       console.warn(`Signal scan failed for ${sym}:`, e.message);

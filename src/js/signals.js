@@ -1585,27 +1585,27 @@ class SignalEngine {
     const minConf = is1m ? 38 : 45;
     if (confidence < minConf) return null;
 
-    // ── ATR-adaptive SL/TP (tighter for 1m scalp trades) ──────────────────
-    // 1m: SL 1.2× ATR → TP1 2.0× → targets hit in 3–15 min
-    // 5m: SL 1.3× ATR → TP1 2.2× → targets hit in 5–25 min
-    // 1H: SL 1.5× ATR → TP1 2.5× → targets hit in hours
+    // ── ATR-adaptive SL/TP — fixed 2:1 min R:R (TP1) and 3:1 max R:R (TP2) ──
+    // TP1 is always exactly 2× the SL distance → R:R = 2.00
+    // TP2 is always exactly 3× the SL distance → R:R = 3.00
+    // SL multiplier scales with timeframe and volatility regime only.
     let slMult, tp1Mult, tp2Mult, timingHint, dedupMs;
     if (is1m) {
       slMult  = volReg === 'high' ? 1.4  : 1.2;
-      tp1Mult = volReg === 'high' ? 2.3  : 2.0;
-      tp2Mult = volReg === 'high' ? 3.8  : 3.2;
+      tp1Mult = slMult * 2;   // 2:1 R:R minimum
+      tp2Mult = slMult * 3;   // 3:1 R:R maximum
       timingHint = '3–15 min';
       dedupMs    = 5 * 60 * 1000;
     } else if (is5m) {
       slMult  = volReg === 'high' ? 1.6  : 1.3;
-      tp1Mult = volReg === 'high' ? 2.6  : 2.2;
-      tp2Mult = volReg === 'high' ? 4.0  : 3.5;
+      tp1Mult = slMult * 2;   // 2:1 R:R minimum
+      tp2Mult = slMult * 3;   // 3:1 R:R maximum
       timingHint = '5–25 min';
       dedupMs    = 15 * 60 * 1000;
     } else {
       slMult  = volReg === 'high' ? 1.8  : 1.5;
-      tp1Mult = volReg === 'high' ? 2.8  : 2.5;
-      tp2Mult = volReg === 'high' ? 4.5  : 4.0;
+      tp1Mult = slMult * 2;   // 2:1 R:R minimum
+      tp2Mult = slMult * 3;   // 3:1 R:R maximum
       timingHint = '15–60 min';
       dedupMs    = 45 * 60 * 1000;
     }

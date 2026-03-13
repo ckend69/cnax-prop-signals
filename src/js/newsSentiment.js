@@ -1,5 +1,18 @@
 // newsSentiment.js — Market news fetching, sentiment scoring, ForexFactory calendar, and price reaction analysis
 
+// Alpha Vantage doesn't have futures tickers — use tracking ETF proxies so
+// the NEWS_SENTIMENT endpoint returns relevant articles for each contract.
+const AV_FUTURES_PROXY = {
+  'ES': 'SPY',  'MES': 'SPY',
+  'NQ': 'QQQ',  'MNQ': 'QQQ',
+  'YM': 'DIA',
+  'RTY': 'IWM',
+  'CL': 'USO',
+  'GC': 'GLD',
+  'SI': 'SLV',
+  'NG': 'UNG',
+};
+
 // Maps instruments to their Finnhub/news category keywords
 const NEWS_TOPICS = {
   'EURUSD': ['EUR', 'euro', 'ECB', 'European Central Bank'],
@@ -133,9 +146,11 @@ class NewsSentiment {
     if (!topics) return [];
 
     // AV NEWS_SENTIMENT endpoint — free with premium key
-    const tickers = inst?.type === 'crypto' ? symbol.replace('USDT', '') :
-                    inst?.type === 'forex'   ? `FOREX:${inst.av}${inst.quote}` :
-                    `FUTURES:${symbol}`;
+    // Futures: use ETF proxies since AV doesn't index futures symbols directly
+    const tickers = inst?.type === 'crypto'  ? symbol.replace('USDT', '') :
+                    inst?.type === 'forex'    ? `FOREX:${inst.av}${inst.quote}` :
+                    inst?.type === 'futures'  ? (AV_FUTURES_PROXY[symbol] || 'SPY') :
+                    symbol;
 
     const url = `https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${tickers}&sort=LATEST&limit=10&apikey=${avKey}`;
 

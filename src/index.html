@@ -1564,6 +1564,8 @@ async function startScan() {
     newSigs.forEach(notifyNewSignal);
 
     signals = filtered;
+    // Push to NinjaTrader bridge so NT8 indicator can draw signals on charts
+    if (window.electronAPI?.broadcastSignals) window.electronAPI.broadcastSignals(signals);
     document.getElementById('last-scan-time').textContent = new Date().toLocaleTimeString();
 
     // Update kill zone badge in titlebar
@@ -2365,7 +2367,19 @@ async function runBacktest() {
 let activeNewsSym = null;
 
 async function fetchNews() {
-  const syms  = getActiveSymbols().slice(0, 8);
+  // News shows a balanced cross-market view — pick up to 3 from each
+  // enabled category so futures/crypto don't get crowded out by 12 forex pairs
+  const all     = getActiveSymbols();
+  const futures = all.filter(s => window.INSTRUMENTS[s]?.type === 'futures').slice(0, 3);
+  const forex   = all.filter(s => window.INSTRUMENTS[s]?.type === 'forex').slice(0, 3);
+  const crypto  = all.filter(s => window.INSTRUMENTS[s]?.type === 'crypto').slice(0, 2);
+  // Always include key macro symbols even if their category is not in scan settings
+  const defaults = ['ES','NQ','CL','EURUSD','GBPUSD','XAUUSD','BTCUSDT','ETHUSDT'];
+  const syms = [...new Set([...futures, ...forex, ...crypto,
+                             ...(futures.length === 0 ? ['ES','NQ','CL'] : []),
+                             ...(forex.length === 0   ? ['EURUSD','GBPUSD'] : []),
+                             ...(crypto.length === 0  ? ['BTCUSDT'] : []),
+                            ])].slice(0, 8);
   const tabs  = document.getElementById('news-tabs');
   const area  = document.getElementById('news-sentiment-area');
   if (!tabs || !area) return;

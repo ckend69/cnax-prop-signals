@@ -1,6 +1,6 @@
 {
   "name": "cnax-prop-signals",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "CNAX Prop Signals — AI-powered trading signals for prop firm challenges",
   "main": "electron/main.js",
   "scripts": {
